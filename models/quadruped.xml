@@ -1,0 +1,146 @@
+<!--
+  The erg four-legged robot (design record docs/design/2026-11-24-robot-and-comparison.md).
+
+  Frame: x forward, y left, z up. Units: metres, kilograms, seconds, radians.
+  Legs: FL, FR, HL, HR (front/hind, left/right). Joints per leg: hip_abd (about x), hip_flex (about y), knee (about y).
+
+  Kept convertible to URDF (for Isaac Lab later): only hinge joints and one free joint at the root, an explicit
+  <inertial> in every body, geoms are boxes, capsules, spheres or a plane, no tendons, no equality constraints.
+  tests/test_robot_model.py checks these rules.
+
+  Servo: Feetech STS3215 at 7.4 V. Datasheet values: stall torque 19.5 kg*cm = 1.91 N*m, no-load speed
+  0.19 s per 60 degrees = 5.51 rad/s. These set:
+    - forcerange = +-1.91 N*m on every actuator;
+    - joint damping = stall torque / no-load speed = 0.3466 N*m*s/rad, the straight-line torque-speed curve of a
+      DC motor (its back-EMF), so that no joint turns faster than the servo can.
+  Estimates, NOT measured, to be replaced by identification on the real servo (as with the BAM tool):
+    armature, frictionloss, position gain kp.
+
+  Masses are estimates for the first build (12 servos at 55 g; frame, battery, four microcontrollers);
+  total 1.51 kg, inside the 1.2-2 kg range of the design record. Replace with weighed values after building.
+
+  Collisions: feet, shanks and the torso touch the floor; parts of the robot do not touch each other.
+-->
+<mujoco model="erg_quadruped">
+  <compiler angle="radian" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+
+  <default>
+    <joint damping="0.3466" armature="0.01" frictionloss="0.05"/>
+    <position kp="10" forcerange="-1.91 1.91"/>
+    <geom contype="0" conaffinity="0" friction="0.8 0.02 0.0001"/>
+    <default class="abd">
+      <joint axis="1 0 0" range="-0.5 0.5"/>
+      <position ctrlrange="-0.5 0.5"/>
+    </default>
+    <default class="flex">
+      <joint axis="0 1 0" range="-1.6 1.6"/>
+      <position ctrlrange="-1.6 1.6"/>
+    </default>
+    <default class="knee">
+      <joint axis="0 1 0" range="-2.6 -0.2"/>
+      <position ctrlrange="-2.6 -0.2"/>
+    </default>
+    <default class="touch">
+      <geom contype="1" conaffinity="0"/>
+    </default>
+  </default>
+
+  <worldbody>
+    <geom name="floor" type="plane" size="5 5 0.1" contype="0" conaffinity="1"/>
+
+    <body name="torso" pos="0 0 0.17">
+      <freejoint name="root"/>
+      <inertial pos="0 0 0" mass="0.75" diaginertia="0.001056 0.003181 0.003925"/>
+      <geom name="torso" class="touch" type="box" size="0.11 0.06 0.025"/>
+      <site name="imu" pos="0 0 0"/>
+
+      <!-- Front left -->
+      <body name="FL_hip" pos="0.09 0.05 0">
+        <inertial pos="0 0.02 0" mass="0.08" diaginertia="1.233e-5 2.167e-5 1.767e-5"/>
+        <joint name="FL_hip_abd" class="abd"/>
+        <geom type="box" pos="0 0.02 0" size="0.0225 0.0125 0.0175"/>
+        <body name="FL_thigh" pos="0 0.03 0">
+          <inertial pos="0 0 -0.045" mass="0.08" diaginertia="5.4e-5 5.4e-5 1.23e-5"/>
+          <joint name="FL_hip_flex" class="flex"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.09" size="0.012"/>
+          <body name="FL_shank" pos="0 0 -0.09">
+            <inertial pos="0 0 -0.05" mass="0.03" diaginertia="2.03e-5 2.03e-5 2e-6"/>
+            <joint name="FL_knee" class="knee"/>
+            <geom class="touch" type="capsule" fromto="0 0 0 0 0 -0.078" size="0.008"/>
+            <geom name="FL_foot" class="touch" type="sphere" pos="0 0 -0.09" size="0.012"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- Front right -->
+      <body name="FR_hip" pos="0.09 -0.05 0">
+        <inertial pos="0 -0.02 0" mass="0.08" diaginertia="1.233e-5 2.167e-5 1.767e-5"/>
+        <joint name="FR_hip_abd" class="abd"/>
+        <geom type="box" pos="0 -0.02 0" size="0.0225 0.0125 0.0175"/>
+        <body name="FR_thigh" pos="0 -0.03 0">
+          <inertial pos="0 0 -0.045" mass="0.08" diaginertia="5.4e-5 5.4e-5 1.23e-5"/>
+          <joint name="FR_hip_flex" class="flex"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.09" size="0.012"/>
+          <body name="FR_shank" pos="0 0 -0.09">
+            <inertial pos="0 0 -0.05" mass="0.03" diaginertia="2.03e-5 2.03e-5 2e-6"/>
+            <joint name="FR_knee" class="knee"/>
+            <geom class="touch" type="capsule" fromto="0 0 0 0 0 -0.078" size="0.008"/>
+            <geom name="FR_foot" class="touch" type="sphere" pos="0 0 -0.09" size="0.012"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- Hind left -->
+      <body name="HL_hip" pos="-0.09 0.05 0">
+        <inertial pos="0 0.02 0" mass="0.08" diaginertia="1.233e-5 2.167e-5 1.767e-5"/>
+        <joint name="HL_hip_abd" class="abd"/>
+        <geom type="box" pos="0 0.02 0" size="0.0225 0.0125 0.0175"/>
+        <body name="HL_thigh" pos="0 0.03 0">
+          <inertial pos="0 0 -0.045" mass="0.08" diaginertia="5.4e-5 5.4e-5 1.23e-5"/>
+          <joint name="HL_hip_flex" class="flex"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.09" size="0.012"/>
+          <body name="HL_shank" pos="0 0 -0.09">
+            <inertial pos="0 0 -0.05" mass="0.03" diaginertia="2.03e-5 2.03e-5 2e-6"/>
+            <joint name="HL_knee" class="knee"/>
+            <geom class="touch" type="capsule" fromto="0 0 0 0 0 -0.078" size="0.008"/>
+            <geom name="HL_foot" class="touch" type="sphere" pos="0 0 -0.09" size="0.012"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- Hind right -->
+      <body name="HR_hip" pos="-0.09 -0.05 0">
+        <inertial pos="0 -0.02 0" mass="0.08" diaginertia="1.233e-5 2.167e-5 1.767e-5"/>
+        <joint name="HR_hip_abd" class="abd"/>
+        <geom type="box" pos="0 -0.02 0" size="0.0225 0.0125 0.0175"/>
+        <body name="HR_thigh" pos="0 -0.03 0">
+          <inertial pos="0 0 -0.045" mass="0.08" diaginertia="5.4e-5 5.4e-5 1.23e-5"/>
+          <joint name="HR_hip_flex" class="flex"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.09" size="0.012"/>
+          <body name="HR_shank" pos="0 0 -0.09">
+            <inertial pos="0 0 -0.05" mass="0.03" diaginertia="2.03e-5 2.03e-5 2e-6"/>
+            <joint name="HR_knee" class="knee"/>
+            <geom class="touch" type="capsule" fromto="0 0 0 0 0 -0.078" size="0.008"/>
+            <geom name="HR_foot" class="touch" type="sphere" pos="0 0 -0.09" size="0.012"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <position name="FL_hip_abd" joint="FL_hip_abd" class="abd"/>
+    <position name="FL_hip_flex" joint="FL_hip_flex" class="flex"/>
+    <position name="FL_knee" joint="FL_knee" class="knee"/>
+    <position name="FR_hip_abd" joint="FR_hip_abd" class="abd"/>
+    <position name="FR_hip_flex" joint="FR_hip_flex" class="flex"/>
+    <position name="FR_knee" joint="FR_knee" class="knee"/>
+    <position name="HL_hip_abd" joint="HL_hip_abd" class="abd"/>
+    <position name="HL_hip_flex" joint="HL_hip_flex" class="flex"/>
+    <position name="HL_knee" joint="HL_knee" class="knee"/>
+    <position name="HR_hip_abd" joint="HR_hip_abd" class="abd"/>
+    <position name="HR_hip_flex" joint="HR_hip_flex" class="flex"/>
+    <position name="HR_knee" joint="HR_knee" class="knee"/>
+  </actuator>
+</mujoco>
