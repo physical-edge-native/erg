@@ -1,0 +1,72 @@
+"""The environment with one controller per leg (Issue #11).
+
+Pass criteria:
+- the same seed, command and actions give the same observations bit for bit on repeated runs;
+  a different seed gives different observations;
+- every observation value equals the MuJoCo state it stands for: joint positions and speeds equal qpos and qvel
+  bit for bit, loads equal actuator force / stall torque bit for bit, the contact flag follows the touch sensor;
+- the IMU reads like an IMU: the gyroscope equals the torso's angular velocity in its own frame (to 1e-12 rad/s;
+  computed by MuJoCo along another path, so only rounding may differ) and, standing still, the accelerometer
+  reads gravity (+9.81 m/s^2 on z, within 0.05 m/s^2, the small remaining sway);
+- actions outside the joint ranges are clipped to the ranges.
+"""
+
+import mujoco
+import numpy as np
+
+from erg import robot
+from erg.env import ACT_SIZE, N_LEGS, OBS_SIZE, Env
+
+COMMAND = (0.2, -0.1, 0.3)
+
+
+def run(seed, steps=50):
+    env = Env()
+    obs = [env.reset(seed, COMMAND)]
+    rng = np.random.Generator(np.random.PCG64(1))
+    for _ in range(steps):
+        a = robot.STAND.reshape(N_LEGS, ACT_SIZE) + rng.uniform(-0.1, 0.1, (N_LEGS, ACT_SIZE))
+        obs.append(env.step(a))
+    return np.array(obs)
+
+
+def test_deterministic():
+    a, b = run(7), run(7)
+    assert a.shape == (51, N_LEGS, OBS_SIZE)
+    assert np.array_equal(a.view(np.uint64), b.view(np.uint64))
+    assert not np.array_equal(a, run(8))
+
+
+def test_observation_matches_state():
+    env = Env()
+    env.reset(3, COMMAND)
+    for _ in range(25):
+        obs = env.step(robot.STAND.reshape(N_LEGS, ACT_SIZE))
+    d = env.data
+    for i, leg in enumerate(robot.LEGS):
+        o = obs[i]
+        joints = slice(3 * i, 3 * i + 3)
+        assert np.array_equal(o[0:3], d.qpos[7:][joints])
+        assert np.array_equal(o[3:6], d.qvel[6:][joints])
+        assert np.array_equal(o[6:9], d.actuator_force[joints] / robot.SERVO_STALL_TORQUE)
+        assert np.max(np.abs(o[12:15] - d.qvel[3:6])) < 1e-12  # free joint angular velocity is in the body frame
+        assert abs(o[11] - 9.81) < 0.05 and np.max(np.abs(o[9:11])) < 0.05
+        touch = d.sensordata[env.model.sensor(f"{leg}_touch").adr[0]]
+        assert touch > 0 and o[15] == 1.0  # standing: every foot is pressed
+        assert np.array_equal(o[16:19], COMMAND)
+        assert np.array_equal(o[19:], np.eye(N_LEGS)[i])
+
+
+def test_actions_are_clipped():
+    env = Env()
+    env.reset(0)
+    env.step(np.full((N_LEGS, ACT_SIZE), 100.0))
+    assert np.array_equal(env.data.ctrl, env.model.actuator_ctrlrange[:, 1])
+
+
+def test_foot_in_air_reads_no_contact():
+    env = Env()
+    env.reset(0)
+    env.data.qpos[2] += 0.2  # lift the robot
+    mujoco.mj_forward(env.model, env.data)
+    assert np.all(env.observe()[:, 15] == 0.0)
