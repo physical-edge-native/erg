@@ -4,7 +4,9 @@ Pass criteria:
 - every row has the columns of the list, a stage of 1 or 2, a positive whole quantity, and a known role;
 - without spares, stages 1 and 2 together give what the MuJoCo model needs: one servo per actuator (12),
   and per leg one microcontroller, one IMU, one foot switch and one servo bus adapter (4 each);
-- stage 1 is exactly one leg (3 servos and one of each per-leg part), with at least one spare servo.
+- stage 1 is exactly one leg (3 servos and one of each per-leg part), with at least one spare servo;
+- the parts to run the robot are listed (Issue #31): one 5 V regulator per microcontroller, a bench power supply in
+  stage 1, and at least one battery and a charger.
 """
 
 import csv
@@ -21,8 +23,9 @@ COLUMNS = [
     "stage", "part", "role", "quantity", "spare", "reference_price", "currency", "tax_included",
     "source", "second_source", "checked",
 ]
-PER_LEG_ROLES = ("microcontroller", "imu", "foot_switch", "bus_adapter")
-ROLES = ("servo",) + PER_LEG_ROLES
+PER_LEG_ROLES = ("microcontroller", "imu", "foot_switch", "bus_adapter", "regulator")
+POWER_ROLES = ("power_supply", "battery", "charger", "small_parts")
+ROLES = ("servo",) + PER_LEG_ROLES + POWER_ROLES
 
 
 def read_bom():
@@ -72,3 +75,11 @@ def test_stage_1_is_one_leg_with_a_spare_servo():
     for role in PER_LEG_ROLES:
         assert c[role] == 1, role
     assert counts(rows, stages=(1,), spare=True)["servo"] >= 1
+
+
+def test_parts_to_run_the_robot_are_listed():
+    rows = read_bom()
+    whole = counts(rows, stages=(1, 2), spare=False)
+    assert whole["regulator"] == whole["microcontroller"]
+    assert counts(rows, stages=(1,), spare=False)["power_supply"] == 1
+    assert whole["battery"] >= 1 and whole["charger"] >= 1
