@@ -8,14 +8,20 @@ Pass criteria:
 - the IMU reads like an IMU: the gyroscope equals the torso's angular velocity in its own frame (to 1e-12 rad/s;
   computed by MuJoCo along another path, so only rounding may differ) and, standing still, the accelerometer
   reads gravity (+9.81 m/s^2 on z, within 0.05 m/s^2, the small remaining sway);
-- actions outside the joint ranges are clipped to the ranges.
+- actions outside the joint ranges are clipped to the ranges;
+- commands drawn at reset (Issue #27) stay inside COMMAND_MAX in both directions, cover both signs, and the same seed
+  gives the same command bit for bit; a given command is used as given;
+- the forward limit is within what the servos allow (design record 2026-11-25-walking-targets.md): with the leg
+  length of the standing model, the hip turns at under half the no-load speed while the foot is on the ground
+  (the servo is loaded), and the foot can be brought forward in the air (unloaded) at under the no-load speed when
+  each foot is on the ground STANCE_FRACTION of the time.
 """
 
 import mujoco
 import numpy as np
 
 from erg import robot
-from erg.env import ACT_SIZE, N_LEGS, OBS_SIZE, Env
+from erg.env import ACT_SIZE, COMMAND_MAX, N_LEGS, OBS_SIZE, STANCE_FRACTION, Env
 
 COMMAND = (0.2, -0.1, 0.3)
 
@@ -70,3 +76,27 @@ def test_foot_in_air_reads_no_contact():
     env.data.qpos[2] += 0.2  # lift the robot
     mujoco.mj_forward(env.model, env.data)
     assert np.all(env.observe()[:, 15] == 0.0)
+
+
+def test_commands_are_drawn_inside_the_ranges():
+    env = Env()
+    drawn = np.array([env.reset(seed)[0, 16:19] for seed in range(200)])
+    assert np.all(np.abs(drawn) <= COMMAND_MAX)
+    assert np.all(drawn.min(axis=0) < 0) and np.all(drawn.max(axis=0) > 0)  # both directions
+    again = np.array([env.reset(seed)[0, 16:19] for seed in range(5)])
+    assert np.array_equal(again.view(np.uint64), drawn[:5].view(np.uint64))
+    assert np.array_equal(env.reset(0, COMMAND)[0, 16:19], COMMAND)
+
+
+def test_forward_limit_is_within_the_servo_speed():
+    m = robot.load()
+    d = mujoco.MjData(m)
+    robot.reset_standing(m, d)
+    hip_flexion = d.xpos[m.body("FL_thigh").id][2]
+    sole = d.geom("FL_foot").xpos[2] - m.geom("FL_foot").size[0]
+    leg = hip_flexion - sole
+    assert 0.14 < leg < 0.18, leg
+    stance = COMMAND_MAX[0] / leg  # hip speed with the foot on the ground, rad/s
+    swing = stance * STANCE_FRACTION / (1 - STANCE_FRACTION)  # bringing the foot forward in the air
+    assert stance < robot.SERVO_NO_LOAD_SPEED / 2, stance
+    assert swing < robot.SERVO_NO_LOAD_SPEED, swing

@@ -32,6 +32,26 @@ CONTACT_THRESHOLD = 0.5  # N
 # Half-width of the uniform random offset added to the standing joint angles at reset.
 RESET_JOINT_NOISE = 0.05  # rad
 
+# Walking targets (design record docs/design/2026-11-25-walking-targets.md, Issue #27).
+# Commands are drawn uniformly in [-max, +max] for each of forward speed, sideways speed and turning speed.
+# Forward: near what the servos allow. Standing, the leg (hip flexion shaft to the sole) is about 0.16 m long, so
+# walking at 0.23 m/s turns the hip at about 1.4 rad/s while the foot is on the ground (the servo gives about
+# 2.8 rad/s at half its stall torque) and at up to about 4.3 rad/s to bring the foot forward in the air when three
+# feet are down three quarters of the time (no-load speed 5.5 rad/s). tests/test_env.py checks these margins.
+COMMAND_MAX = np.array([0.23, 0.12, 0.8])  # m/s, m/s, rad/s
+STANCE_FRACTION = 0.75  # slowest walk assumed for the swing-speed margin: each foot on the ground 3/4 of the time
+# A commanded speed counts as reached after REACH_SECONDS of walking without a fall with the mean speed within
+# REACH_TOLERANCE (relative) of the command.
+REACH_SECONDS = 10.0
+REACH_TOLERANCE = 0.2
+# Uneven test ground, not seen in training: blocks from 0 to this height, laid out from a seed.
+TERRAIN_MAX_HEIGHT = 0.02  # m
+
+
+def draw_command(rng: np.random.Generator) -> np.ndarray:
+    """A command drawn uniformly inside COMMAND_MAX, in both directions."""
+    return rng.uniform(-COMMAND_MAX, COMMAND_MAX)
+
 
 class Env:
     def __init__(self):
@@ -54,13 +74,15 @@ class Env:
         s = self.model.sensor(name)
         return np.arange(s.adr[0], s.adr[0] + s.dim[0])
 
-    def reset(self, seed: int, command=(0.0, 0.0, 0.0)) -> np.ndarray:
-        """Standing posture with a small random joint offset drawn from `seed`; returns the observations."""
+    def reset(self, seed: int, command=None) -> np.ndarray:
+        """Standing posture with a small random joint offset drawn from `seed`, and the given command or, if none
+        is given, a command drawn from the same seed (draw_command); returns the observations."""
         rng = np.random.Generator(np.random.PCG64(seed))
         robot.reset_standing(self.model, self.data)
         self.data.qpos[7:] += rng.uniform(-RESET_JOINT_NOISE, RESET_JOINT_NOISE, size=robot.STAND.size)
         mujoco.mj_forward(self.model, self.data)
-        self.command = np.asarray(command, dtype=np.float64).copy()
+        drawn = draw_command(rng)
+        self.command = drawn if command is None else np.asarray(command, dtype=np.float64).copy()
         return self.observe()
 
     def step(self, actions) -> np.ndarray:
