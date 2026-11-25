@@ -20,6 +20,10 @@
   total 1.51 kg, inside the 1.2-2 kg range of the design record. Replace with weighed values after building.
 
   Collisions: feet, shanks and the torso touch the floor; parts of the robot do not touch each other.
+
+  Sensors, per leg (what that leg's microcontroller reads): joint positions, speeds and loads of its three servos;
+  an IMU (accelerometer and gyroscope) on the torso where the leg meets the body; a touch sensor at the foot, which
+  stands for the foot's microswitch.
 -->
 <mujoco model="erg_quadruped">
   <compiler angle="radian" autolimits="true"/>
@@ -53,7 +57,10 @@
       <freejoint name="root"/>
       <inertial pos="0 0 0" mass="0.75" diaginertia="0.001056 0.003181 0.003925"/>
       <geom name="torso" class="touch" type="box" size="0.11 0.06 0.025"/>
-      <site name="imu" pos="0 0 0"/>
+      <site name="FL_imu" pos="0.09 0.05 0"/>
+      <site name="FR_imu" pos="0.09 -0.05 0"/>
+      <site name="HL_imu" pos="-0.09 0.05 0"/>
+      <site name="HR_imu" pos="-0.09 -0.05 0"/>
 
       <!-- Front left -->
       <body name="FL_hip" pos="0.09 0.05 0">
@@ -69,6 +76,7 @@
             <joint name="FL_knee" class="knee"/>
             <geom class="touch" type="capsule" fromto="0 0 0 0 0 -0.078" size="0.008"/>
             <geom name="FL_foot" class="touch" type="sphere" pos="0 0 -0.09" size="0.012"/>
+            <site name="FL_foot" pos="0 0 -0.09" size="0.014"/>
           </body>
         </body>
       </body>
@@ -87,6 +95,7 @@
             <joint name="FR_knee" class="knee"/>
             <geom class="touch" type="capsule" fromto="0 0 0 0 0 -0.078" size="0.008"/>
             <geom name="FR_foot" class="touch" type="sphere" pos="0 0 -0.09" size="0.012"/>
+            <site name="FR_foot" pos="0 0 -0.09" size="0.014"/>
           </body>
         </body>
       </body>
@@ -105,6 +114,7 @@
             <joint name="HL_knee" class="knee"/>
             <geom class="touch" type="capsule" fromto="0 0 0 0 0 -0.078" size="0.008"/>
             <geom name="HL_foot" class="touch" type="sphere" pos="0 0 -0.09" size="0.012"/>
+            <site name="HL_foot" pos="0 0 -0.09" size="0.014"/>
           </body>
         </body>
       </body>
@@ -123,6 +133,7 @@
             <joint name="HR_knee" class="knee"/>
             <geom class="touch" type="capsule" fromto="0 0 0 0 0 -0.078" size="0.008"/>
             <geom name="HR_foot" class="touch" type="sphere" pos="0 0 -0.09" size="0.012"/>
+            <site name="HR_foot" pos="0 0 -0.09" size="0.014"/>
           </body>
         </body>
       </body>
@@ -143,4 +154,58 @@
     <position name="HR_hip_flex" joint="HR_hip_flex" class="flex"/>
     <position name="HR_knee" joint="HR_knee" class="knee"/>
   </actuator>
+  <sensor>
+    <!-- FL: what this leg's microcontroller reads -->
+    <jointpos name="FL_hip_abd_pos" joint="FL_hip_abd"/>
+    <jointpos name="FL_hip_flex_pos" joint="FL_hip_flex"/>
+    <jointpos name="FL_knee_pos" joint="FL_knee"/>
+    <jointvel name="FL_hip_abd_vel" joint="FL_hip_abd"/>
+    <jointvel name="FL_hip_flex_vel" joint="FL_hip_flex"/>
+    <jointvel name="FL_knee_vel" joint="FL_knee"/>
+    <actuatorfrc name="FL_hip_abd_load" actuator="FL_hip_abd"/>
+    <actuatorfrc name="FL_hip_flex_load" actuator="FL_hip_flex"/>
+    <actuatorfrc name="FL_knee_load" actuator="FL_knee"/>
+    <accelerometer name="FL_acc" site="FL_imu"/>
+    <gyro name="FL_gyro" site="FL_imu"/>
+    <touch name="FL_touch" site="FL_foot"/>
+    <!-- FR: what this leg's microcontroller reads -->
+    <jointpos name="FR_hip_abd_pos" joint="FR_hip_abd"/>
+    <jointpos name="FR_hip_flex_pos" joint="FR_hip_flex"/>
+    <jointpos name="FR_knee_pos" joint="FR_knee"/>
+    <jointvel name="FR_hip_abd_vel" joint="FR_hip_abd"/>
+    <jointvel name="FR_hip_flex_vel" joint="FR_hip_flex"/>
+    <jointvel name="FR_knee_vel" joint="FR_knee"/>
+    <actuatorfrc name="FR_hip_abd_load" actuator="FR_hip_abd"/>
+    <actuatorfrc name="FR_hip_flex_load" actuator="FR_hip_flex"/>
+    <actuatorfrc name="FR_knee_load" actuator="FR_knee"/>
+    <accelerometer name="FR_acc" site="FR_imu"/>
+    <gyro name="FR_gyro" site="FR_imu"/>
+    <touch name="FR_touch" site="FR_foot"/>
+    <!-- HL: what this leg's microcontroller reads -->
+    <jointpos name="HL_hip_abd_pos" joint="HL_hip_abd"/>
+    <jointpos name="HL_hip_flex_pos" joint="HL_hip_flex"/>
+    <jointpos name="HL_knee_pos" joint="HL_knee"/>
+    <jointvel name="HL_hip_abd_vel" joint="HL_hip_abd"/>
+    <jointvel name="HL_hip_flex_vel" joint="HL_hip_flex"/>
+    <jointvel name="HL_knee_vel" joint="HL_knee"/>
+    <actuatorfrc name="HL_hip_abd_load" actuator="HL_hip_abd"/>
+    <actuatorfrc name="HL_hip_flex_load" actuator="HL_hip_flex"/>
+    <actuatorfrc name="HL_knee_load" actuator="HL_knee"/>
+    <accelerometer name="HL_acc" site="HL_imu"/>
+    <gyro name="HL_gyro" site="HL_imu"/>
+    <touch name="HL_touch" site="HL_foot"/>
+    <!-- HR: what this leg's microcontroller reads -->
+    <jointpos name="HR_hip_abd_pos" joint="HR_hip_abd"/>
+    <jointpos name="HR_hip_flex_pos" joint="HR_hip_flex"/>
+    <jointpos name="HR_knee_pos" joint="HR_knee"/>
+    <jointvel name="HR_hip_abd_vel" joint="HR_hip_abd"/>
+    <jointvel name="HR_hip_flex_vel" joint="HR_hip_flex"/>
+    <jointvel name="HR_knee_vel" joint="HR_knee"/>
+    <actuatorfrc name="HR_hip_abd_load" actuator="HR_hip_abd"/>
+    <actuatorfrc name="HR_hip_flex_load" actuator="HR_hip_flex"/>
+    <actuatorfrc name="HR_knee_load" actuator="HR_knee"/>
+    <accelerometer name="HR_acc" site="HR_imu"/>
+    <gyro name="HR_gyro" site="HR_imu"/>
+    <touch name="HR_touch" site="HR_foot"/>
+  </sensor>
 </mujoco>
