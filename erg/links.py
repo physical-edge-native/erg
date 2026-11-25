@@ -6,6 +6,7 @@ wasmtime as Dyne's ``mlp-actor`` is. ``build()`` builds the module into erg's ow
 
 from __future__ import annotations
 
+import functools
 import os
 import struct
 import subprocess
@@ -22,8 +23,9 @@ N_VALUES = 11  # gravity direction 3, angular velocity 3, foot contact 1, learne
 MSG_LEN = 24 + 8 + 8 * N_VALUES  # 120 bytes
 
 
+@functools.cache
 def build() -> Path:
-    """Build the WebAssembly module and return the path of the .wasm file."""
+    """Build the WebAssembly module (once per process) and return the path of the .wasm file."""
     cmd = [
         "cargo", "build", "--release", "--quiet", "--locked",
         "--target", "wasm32-unknown-unknown", "--target-dir", str(TARGET),
@@ -76,3 +78,47 @@ def reference_bytes(src: int, step: int, t_us: int, values) -> bytes:
     the module independently."""
     header = struct.pack("<BBBBIQQ", 2, 1, 3, 0, src, step, t_us)
     return header + struct.pack("<II", 1, N_VALUES) + np.ascontiguousarray(values, dtype="<f8").tobytes()
+
+
+# --- Virtual network between the legs (Issue #34) ------------------------------------------------------------------
+
+LINKS = {"none": 0, "neighbours": 1, "all": 2}
+N_LEGS = 4
+
+
+class Network:
+    """Dyne's seeded virtual network between the legs, through the same WebAssembly module.
+
+    ``links``: "none", "neighbours" (the ring front-left, front-right, hind-right, hind-left) or "all".
+    ``loss``: probability that a message is lost. ``lat_us``, ``jitter_us``: base delay and jitter in microseconds
+    (a uniform integer in 0..=2*jitter is added, as in Dyne). ``period_us``: the control period.
+    """
+
+    def __init__(self, links: str, loss: float = 0.0, lat_us: int = 0, jitter_us: int = 0, seed: int = 0,
+                 period_us: int = 20_000, module: Links | None = None):
+        self._m = module or Links()
+        r = self._m.ex["erg_net_new"](self._m.store, LINKS[links], float(loss), lat_us, jitter_us, seed, period_us)
+        if r != 0:
+            raise ValueError(f"erg_net_new rejected the setting ({r})")
+        self.links = links
+
+    def targets(self, leg: int) -> list[int]:
+        """The legs that `leg` sends to, in increasing order."""
+        mask = self._m.ex["erg_net_targets"](self._m.store, leg)
+        return [i for i in range(N_LEGS) if mask >> i & 1]
+
+    def route(self, src: int, dst: int, step: int) -> int | None:
+        """The control step at which a message sent at `step` from `src` to `dst` is delivered, or None if lost."""
+        at = self._m.ex["erg_net_route"](self._m.store, src, dst, step)
+        if at == -2:
+            raise RuntimeError("no network")
+        return None if at < 0 else at
+
+    def step(self, step: int) -> list[tuple[int, int, int | None]]:
+        """Route every message sent at control step `step`, in one call: a list of (source, destination, delivery
+        step or None if lost), sources in leg order and destinations in increasing order (the same random numbers as
+        calling route() in that order)."""
+        n = self._m.ex["erg_net_step"](self._m.store, step)
+        buf = self._m.ex["erg_net_step_buf"](self._m.store)
+        raw = np.frombuffer(bytes(self._m.mem.read(self._m.store, buf, buf + 24 * n)), dtype="<i8").reshape(n, 3)
+        return [(int(a), int(b), None if c < 0 else int(c)) for a, b, c in raw]

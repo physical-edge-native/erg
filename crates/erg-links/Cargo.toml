@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/physical-edge-native/erg"
-description = "WebAssembly module: messages between the legs of the erg robot, in Dyne's wire format"
+description = "WebAssembly module: messages between the legs of the erg robot, in Dyne's wire format, over Dyne's virtual network"
 
 [lib]
 # cdylib = the WebAssembly module called from Python with wasmtime; rlib = native unit tests
@@ -13,6 +13,8 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 # Dyne's single definition of the message format, from the pinned submodule (one place for the pinned version).
 dyne-wire = { path = "../../third_party/dyne/crates/dyne-wire" }
+# Dyne's seeded virtual network (loss, delay, jitter) between the legs (Issue #34).
+dyne-core = { path = "../../third_party/dyne/crates/dyne-core" }
 
 [profile.release]
 panic = "abort"

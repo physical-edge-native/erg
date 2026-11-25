@@ -13,7 +13,8 @@
 //! values to [`erg_values_buf`] and calls [`erg_encode`], which writes the message to [`erg_msg_buf`]; or it
 //! writes a message there and calls [`erg_decode`], which writes the values back and keeps the header fields.
 
-#![cfg_attr(target_arch = "wasm32", no_std)]
+
+pub mod net;
 
 use dyne_wire::{band_get, decode, encode, Header, Payload, KIND_IFACE_BAND, QTY_INERTIAL};
 
@@ -128,12 +129,6 @@ pub extern "C" fn erg_last_t_us() -> u64 {
     unsafe { (*core::ptr::addr_of!(LAST)).t_us }
 }
 
-#[cfg(target_arch = "wasm32")]
-#[panic_handler]
-fn panic(_: &core::panic::PanicInfo) -> ! {
-    loop {}
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -151,4 +146,73 @@ mod tests {
             assert_eq!(a.to_bits(), b.to_bits());
         }
     }
+}
+
+// --- Virtual network: WebAssembly interface (Issue #34) ---------------------------------------------------------------
+
+static mut NET: Option<net::LegNet> = None;
+
+/// Create (or replace) the network. `links`: 0 none, 1 neighbours, 2 all. Returns 0, or -1 for a bad setting.
+#[no_mangle]
+pub extern "C" fn erg_net_new(links: u32, loss: f64, lat_us: u64, jitter_us: u64, seed: u64, period_us: u64) -> i32 {
+    let Some(links) = net::Links::from_u32(links) else { return -1 };
+    if !(0.0..=1.0).contains(&loss) || period_us == 0 {
+        return -1;
+    }
+    // SAFETY: single-threaded module.
+    unsafe { *core::ptr::addr_of_mut!(NET) = Some(net::LegNet::new(links, loss, lat_us, jitter_us, seed, period_us)) };
+    0
+}
+
+/// Bit mask of the legs that `leg` sends to (bit i = leg i), or 0 without a network.
+#[no_mangle]
+pub extern "C" fn erg_net_targets(leg: u32) -> u32 {
+    let net = unsafe { (*core::ptr::addr_of!(NET)).as_ref() };
+    match net {
+        Some(n) if (leg as usize) < net::N_LEGS => n.links.targets(leg as usize).iter().map(|&t| 1u32 << t).sum(),
+        _ => 0,
+    }
+}
+
+/// Fate of a message from `from` to `to` sent at control step `step`: the delivery step, or -1 if lost, or -2
+/// without a network.
+#[no_mangle]
+pub extern "C" fn erg_net_route(from: u32, to: u32, step: u64) -> i64 {
+    let net = unsafe { (*core::ptr::addr_of_mut!(NET)).as_mut() };
+    match net {
+        Some(n) => match n.route(from as usize, to as usize, step) {
+            Some(at) => at as i64,
+            None => -1,
+        },
+        None => -2,
+    }
+}
+
+/// Fates of one control step's messages, filled by [`erg_net_step`]: for each message, (source, destination,
+/// delivery step or -1 if lost) as three i64.
+static mut STEP_OUT: [i64; 3 * net::N_LEGS * (net::N_LEGS - 1)] = [0; 3 * net::N_LEGS * (net::N_LEGS - 1)];
+
+/// Address of the buffer filled by [`erg_net_step`].
+#[no_mangle]
+pub extern "C" fn erg_net_step_buf() -> *mut i64 {
+    core::ptr::addr_of_mut!(STEP_OUT) as *mut i64
+}
+
+/// Route the messages that every leg sends at control step `step`, in a fixed order (source leg 0..4, then its
+/// destinations in increasing order) — the same order, and so the same random numbers, as calling
+/// [`erg_net_route`] message by message. Returns the number of messages, or -2 without a network.
+#[no_mangle]
+pub extern "C" fn erg_net_step(step: u64) -> i32 {
+    // SAFETY: single-threaded module.
+    let (net, out) = unsafe { ((*core::ptr::addr_of_mut!(NET)).as_mut(), &mut *core::ptr::addr_of_mut!(STEP_OUT)) };
+    let Some(n) = net else { return -2 };
+    let mut k = 0;
+    for src in 0..net::N_LEGS {
+        for &dst in n.links.targets(src) {
+            let at = n.route(src, dst, step).map_or(-1, |a| a as i64);
+            out[3 * k..3 * k + 3].copy_from_slice(&[src as i64, dst as i64, at]);
+            k += 1;
+        }
+    }
+    k as i32
 }
