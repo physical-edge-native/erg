@@ -14,7 +14,7 @@ checks them.
 | Commands | Forward speed in [-0.23, +0.23] m/s, sideways speed in [-0.12, +0.12] m/s, turning speed in [-0.8, +0.8] rad/s, each drawn uniformly, in both directions, from the episode's seed (`erg.env.COMMAND_MAX`, `draw_command`) |
 | A commanded speed counts as reached | The robot walks 10 s without a fall, and its mean speed over those 10 s is within 20 % of the command (`REACH_SECONDS`, `REACH_TOLERANCE`) |
 | Uneven test ground | Blocks from 0 to 2 cm high (about a tenth of the leg length), laid out from a seed; used only for evaluation, never in training (`TERRAIN_MAX_HEIGHT`). The ground itself is built in a later issue |
-| Scope | Acrobatic motion (jumps, flips) stays outside erg: it needs actuators that control torque directly, which raise the cost of the robot by about five to twenty times, against erg's aim of a cheap robot (maintainer's decision, 2026-11-25) |
+| Scope | Acrobatic motion (jumps, flips) stays outside erg: it needs actuators that control torque directly, which raise the cost of the robot by about five to twenty times, against erg's aim of a cheap robot (maintainer's decision, 2026-11-25). Actuators for an acrobatic quadruped at about ¥100,000 are proposed as a separate future task of the organization (physical-edge-native/pena-meta#9) |
 
 ## Why 0.23 m/s
 
