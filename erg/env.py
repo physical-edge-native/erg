@@ -34,8 +34,12 @@ RESET_JOINT_NOISE = 0.05  # rad
 
 # Walking targets (design record docs/design/2026-11-25-walking-targets.md, Issue #27).
 # Commands are drawn uniformly in [-max, +max] for each of forward speed, sideways speed and turning speed.
-# The values are provisional until the maintainer chooses among the options of Issue #27.
+# Forward: near what the servos allow. Standing, the leg (hip flexion shaft to the sole) is about 0.16 m long, so
+# walking at 0.23 m/s turns the hip at about 1.4 rad/s while the foot is on the ground (the servo gives about
+# 2.8 rad/s at half its stall torque) and at up to about 4.3 rad/s to bring the foot forward in the air when three
+# feet are down three quarters of the time (no-load speed 5.5 rad/s). tests/test_env.py checks these margins.
 COMMAND_MAX = np.array([0.23, 0.12, 0.8])  # m/s, m/s, rad/s
+STANCE_FRACTION = 0.75  # slowest walk assumed for the swing-speed margin: each foot on the ground 3/4 of the time
 # A commanded speed counts as reached after REACH_SECONDS of walking without a fall with the mean speed within
 # REACH_TOLERANCE (relative) of the command.
 REACH_SECONDS = 10.0
