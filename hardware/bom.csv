@@ -4,10 +4,17 @@ stage,part,role,quantity,spare,reference_price,currency,tax_included,source,seco
 1,Seeed Studio XIAO ESP32S3,microcontroller,1,no,1456,JPY,yes,https://www.switch-science.com/products/8968,https://www.digikey.com/en/products/detail/seeed-technology-co-ltd/102010634/26553885,2026-11-25
 1,Adafruit LSM6DSOX 6 DoF accelerometer and gyroscope (4438),imu,1,no,11.95,USD,no,https://www.adafruit.com/products/4438,https://www.digikey.com/en/products/detail/adafruit-industries-llc/4438/11497501,2026-11-25
 1,Waveshare Bus Servo Adapter (A),bus_adapter,1,no,4.99,USD,no,https://www.waveshare.com/product/bus-servo-adapter-a.htm,,2026-11-25
-1,Lever microswitch (foot contact),foot_switch,1,no,300,JPY,yes,,,2026-11-24
-1,Lever microswitch (foot contact),foot_switch,1,yes,300,JPY,yes,,,2026-11-24
+1,Omron SS-5GLD subminiature microswitch with lever (foot contact),foot_switch,1,no,187,JPY,yes,https://jp.rs-online.com/web/p/micro-switches/3194300,,2026-11-25
+1,Omron SS-5GLD subminiature microswitch with lever (foot contact),foot_switch,1,yes,187,JPY,yes,https://jp.rs-online.com/web/p/micro-switches/3194300,,2026-11-25
 2,Feetech STS3215 serial bus servo (7.4 V),servo,9,no,3245,JPY,yes,https://www.switch-science.com/products/7489,https://www.waveshare.com/st3215-servo.htm?sku=33014,2026-11-25
 2,Seeed Studio XIAO ESP32S3,microcontroller,3,no,1456,JPY,yes,https://www.switch-science.com/products/8968,https://www.digikey.com/en/products/detail/seeed-technology-co-ltd/102010634/26553885,2026-11-25
 2,Adafruit LSM6DSOX 6 DoF accelerometer and gyroscope (4438),imu,3,no,11.95,USD,no,https://www.adafruit.com/products/4438,https://www.digikey.com/en/products/detail/adafruit-industries-llc/4438/11497501,2026-11-25
 2,Waveshare Bus Servo Adapter (A),bus_adapter,3,no,4.99,USD,no,https://www.waveshare.com/product/bus-servo-adapter-a.htm,,2026-11-25
-2,Lever microswitch (foot contact),foot_switch,3,no,300,JPY,yes,,,2026-11-24
+2,Omron SS-5GLD subminiature microswitch with lever (foot contact),foot_switch,3,no,187,JPY,yes,https://jp.rs-online.com/web/p/micro-switches/3194300,,2026-11-25
+1,Bench power supply 0-30 V 0-10 A with adjustable current limit; bought in Japan (estimate; e.g. OWON SPE3103 or similar),power_supply,1,no,12000,JPY,yes,https://item.rakuten.co.jp/owon/spe3051/,,2026-11-25
+1,Pololu D24V10F5 5 V 1 A step-down regulator (microcontroller supply from 7.4 V),regulator,1,no,13.95,USD,no,https://www.pololu.com/product/2831,,2026-11-25
+1,Small parts: M2 self-tapping screws; wires; XT60 and JST connectors (estimate; the servos come with horn screws),small_parts,1,no,3000,JPY,yes,,,2026-11-25
+2,Pololu D24V10F5 5 V 1 A step-down regulator (microcontroller supply from 7.4 V),regulator,3,no,13.95,USD,no,https://www.pololu.com/product/2831,,2026-11-25
+2,Gens Ace 2S 7.4 V 2200 mAh 60C LiPo battery with XT60,battery,2,no,23.79,USD,no,https://horizonhobby.com/product/7.4v-2200mah-2s-60c-hardcase-g-tech-lipo-battery-xt60/GEA222S60X76GT.html,https://www.ebay.com/p/26051953025,2026-11-25
+2,G-FORCE G2 2S LiPo balance charger (0.8 A),charger,1,no,1520,JPY,yes,https://joshinweb.jp/game/19520/4580416431590.html,https://hobbyking.com/jp_jp/batteries-chargers/chargers.html,2026-11-25
+2,Small parts: M2 self-tapping screws; wires; XT60 and JST connectors (estimate),small_parts,1,no,3000,JPY,yes,,,2026-11-25
