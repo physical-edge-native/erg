@@ -8,14 +8,16 @@ Pass criteria:
 - the IMU reads like an IMU: the gyroscope equals the torso's angular velocity in its own frame (to 1e-12 rad/s;
   computed by MuJoCo along another path, so only rounding may differ) and, standing still, the accelerometer
   reads gravity (+9.81 m/s^2 on z, within 0.05 m/s^2, the small remaining sway);
-- actions outside the joint ranges are clipped to the ranges.
+- actions outside the joint ranges are clipped to the ranges;
+- commands drawn at reset (Issue #27) stay inside COMMAND_MAX in both directions, cover both signs, and the same seed
+  gives the same command bit for bit; a given command is used as given.
 """
 
 import mujoco
 import numpy as np
 
 from erg import robot
-from erg.env import ACT_SIZE, N_LEGS, OBS_SIZE, Env
+from erg.env import ACT_SIZE, COMMAND_MAX, N_LEGS, OBS_SIZE, Env
 
 COMMAND = (0.2, -0.1, 0.3)
 
@@ -70,3 +72,14 @@ def test_foot_in_air_reads_no_contact():
     env.data.qpos[2] += 0.2  # lift the robot
     mujoco.mj_forward(env.model, env.data)
     assert np.all(env.observe()[:, 15] == 0.0)
+
+
+def test_commands_are_drawn_inside_the_ranges():
+    env = Env()
+    drawn = np.array([env.reset(seed)[0, 16:19] for seed in range(200)])
+    assert np.all(np.abs(drawn) <= COMMAND_MAX)
+    assert np.all(drawn.min(axis=0) < 0) and np.all(drawn.max(axis=0) > 0)  # both directions
+    again = np.array([env.reset(seed)[0, 16:19] for seed in range(5)])
+    assert np.array_equal(again.view(np.uint64), drawn[:5].view(np.uint64))
+    assert np.array_equal(env.reset(0, COMMAND)[0, 16:19], COMMAND)
+
