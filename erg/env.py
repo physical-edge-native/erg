@@ -15,6 +15,12 @@ Observation of one leg (OBS_SIZE values, in this order):
     leg identifier (4)    one-hot, in the order of robot.LEGS
 
 Action of one leg: target angles (rad) of its three joints, clipped to the joint ranges.
+
+Central mode (Issue #13), for comparison on the same body: one policy sees all sensors and commands all 12 joints,
+with no messages between legs. Its observation (CENTRAL_OBS_SIZE values) is each leg's sensor values above (joints,
+IMU, foot contact; 16 per leg, in the order of robot.LEGS) followed by the command once; there is no leg identifier.
+Its action is the 12 target angles in the order of robot.JOINT_NAMES. Only the controller differs between the modes:
+the same joint commands give the same physical state bit for bit.
 """
 
 import mujoco
@@ -23,8 +29,11 @@ import numpy as np
 from erg import robot
 
 N_LEGS = len(robot.LEGS)
-OBS_SIZE = 3 + 3 + 3 + 3 + 3 + 1 + 3 + N_LEGS
+SENSOR_SIZE = 3 + 3 + 3 + 3 + 3 + 1  # one leg's own sensor values
+OBS_SIZE = SENSOR_SIZE + 3 + N_LEGS
 ACT_SIZE = len(robot.JOINTS_PER_LEG)
+CENTRAL_OBS_SIZE = N_LEGS * SENSOR_SIZE + 3
+CENTRAL_ACT_SIZE = N_LEGS * ACT_SIZE
 
 # Foot force above which the microswitch is taken as pressed. An estimate, to be set from the chosen switch.
 CONTACT_THRESHOLD = 0.5  # N
@@ -54,7 +63,10 @@ def draw_command(rng: np.random.Generator) -> np.ndarray:
 
 
 class Env:
-    def __init__(self):
+    def __init__(self, central: bool = False):
+        """central=False: one controller per leg (observations (4, OBS_SIZE), actions (4, 3)).
+        central=True: one policy for the whole body (observation (CENTRAL_OBS_SIZE,), action (12,))."""
+        self.central = central
         self.model = robot.load()
         self.data = mujoco.MjData(self.model)
         self.substeps = round(robot.CONTROL_PERIOD / self.model.opt.timestep)
@@ -86,7 +98,8 @@ class Env:
         return self.observe()
 
     def step(self, actions) -> np.ndarray:
-        """Apply each leg's joint targets (shape (4, 3)) for one control period; returns the observations."""
+        """Apply the joint targets (shape (4, 3), or (12,) in central mode) for one control period; returns the
+        observations."""
         targets = np.clip(np.asarray(actions, dtype=np.float64).reshape(N_LEGS, ACT_SIZE), self._lo, self._hi)
         self.data.ctrl[:] = targets.ravel()
         for _ in range(self.substeps):
@@ -96,7 +109,13 @@ class Env:
         return self.observe()
 
     def observe(self) -> np.ndarray:
-        """Observations of all legs, shape (4, OBS_SIZE)."""
+        """Observations of all legs, shape (4, OBS_SIZE); in central mode, shape (CENTRAL_OBS_SIZE,)."""
+        legs = self._observe_legs()
+        if self.central:
+            return np.concatenate([legs[:, :SENSOR_SIZE].ravel(), self.command])
+        return legs
+
+    def _observe_legs(self) -> np.ndarray:
         sd = self.data.sensordata
         obs = np.empty((N_LEGS, OBS_SIZE))
         for i, leg in enumerate(robot.LEGS):
