@@ -1,0 +1,13 @@
+stage,part,role,quantity,spare,reference_price,currency,tax_included,source,second_source,checked
+1,Feetech STS3215 serial bus servo (7.4 V),servo,3,no,3245,JPY,yes,https://www.switch-science.com/products/7489,https://www.waveshare.com/st3215-servo.htm?sku=33014,2026-11-25
+1,Feetech STS3215 serial bus servo (7.4 V),servo,1,yes,3245,JPY,yes,https://www.switch-science.com/products/7489,https://www.waveshare.com/st3215-servo.htm?sku=33014,2026-11-25
+1,Seeed Studio XIAO ESP32S3,microcontroller,1,no,1456,JPY,yes,https://www.switch-science.com/products/8968,https://www.digikey.com/en/products/detail/seeed-technology-co-ltd/102010634/26553885,2026-11-25
+1,Adafruit LSM6DSOX 6 DoF accelerometer and gyroscope (4438),imu,1,no,11.95,USD,no,https://www.adafruit.com/products/4438,https://www.digikey.com/en/products/detail/adafruit-industries-llc/4438/11497501,2026-11-25
+1,Waveshare Bus Servo Adapter (A),bus_adapter,1,no,4.99,USD,no,https://www.waveshare.com/product/bus-servo-adapter-a.htm,,2026-11-25
+1,Lever microswitch (foot contact),foot_switch,1,no,300,JPY,yes,,,2026-11-24
+1,Lever microswitch (foot contact),foot_switch,1,yes,300,JPY,yes,,,2026-11-24
+2,Feetech STS3215 serial bus servo (7.4 V),servo,9,no,3245,JPY,yes,https://www.switch-science.com/products/7489,https://www.waveshare.com/st3215-servo.htm?sku=33014,2026-11-25
+2,Seeed Studio XIAO ESP32S3,microcontroller,3,no,1456,JPY,yes,https://www.switch-science.com/products/8968,https://www.digikey.com/en/products/detail/seeed-technology-co-ltd/102010634/26553885,2026-11-25
+2,Adafruit LSM6DSOX 6 DoF accelerometer and gyroscope (4438),imu,3,no,11.95,USD,no,https://www.adafruit.com/products/4438,https://www.digikey.com/en/products/detail/adafruit-industries-llc/4438/11497501,2026-11-25
+2,Waveshare Bus Servo Adapter (A),bus_adapter,3,no,4.99,USD,no,https://www.waveshare.com/product/bus-servo-adapter-a.htm,,2026-11-25
+2,Lever microswitch (foot contact),foot_switch,3,no,300,JPY,yes,,,2026-11-24
