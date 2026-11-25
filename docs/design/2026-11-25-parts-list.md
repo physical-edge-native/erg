@@ -16,7 +16,7 @@ its quantities match the MuJoCo model.
 | Frame | Printed in PLA on a 3D printer available to the maintainer (Bambu Lab X2D); changed on 2026-11-25 from an outside printing service | The printer became available; only PLA is at hand. The frame is designed in #25 ([2026-11-25-first-leg-frame.md](2026-11-25-first-leg-frame.md)) |
 | Where the list lives | In this public repository, with list prices and their sources | Anyone can rebuild the robot from it. Prices actually paid are kept private |
 | Availability | Prefer parts that are unlikely to go out of stock; give a second source where one exists | Stock of the servo at one Japanese shop was seen both in stock and sold out on the same day |
-| Power for stage 1 | A bench power supply with an adjustable current limit, set to 7.4 V: OWON SPE3103 (0-30 V, 0-10 A) | The servo's stall current is not clear from the translated datasheet (both 650 mA and 2.5 A appear); the limit keeps the first runs safe, and the same supply measures the current needed to choose the battery. 10 A covers twelve servos at the larger stall current reading only with the current limit on; walking draws far less than stall |
+| Power for stage 1 | A bench power supply with an adjustable current limit, set to 7.4 V: a 0-30 V, 0-10 A supply bought in Japan (any model with an adjustable current limit; for example OWON SPE3103) | The servo's stall current is not clear from the translated datasheet (both 650 mA and 2.5 A appear); the limit keeps the first runs safe, and the same supply measures the current needed to choose the battery. 10 A covers twelve servos at the larger stall current reading only with the current limit on; walking draws far less than stall |
 | Power on the robot (#31) | Two-cell lithium-polymer battery, 7.4 V 2200 mAh, two packs (Gens Ace 60C, XT60), and a two-cell balance charger (G-FORCE G2, 0.8 A, about 3 h per pack) | Matches the servos' 7.4 V rating directly. Two packs let one charge while the other runs. The capacity is a first choice, to be checked against the current measured on the bench |
 | Microcontroller supply (#31) | One Pololu D24V10F5 step-down regulator (5 V, 1 A, input 5.1-36 V) per leg | Works over the whole range of a two-cell battery (8.4 V full, about 6.4 V empty); 1 A leaves room for the radio's current peaks. Modules found in Japanese shops needed at least 7.5-8 V in, or gave only 300 mA |
 | Foot switch (#31) | Omron SS-5GLD subminiature microswitch with lever | Small enough for the foot (the shank ends in a 12 mm sphere); the lever gives a light touch. The shop notes that delivery can be slow, so it is ordered first |
@@ -35,10 +35,10 @@ its quantities match the MuJoCo model.
 - `small_parts` rows (screws, wires, connectors) are estimates without a shop. The servos come with horn screws
   and an accessory kit; M2 self-tapping screws for the frame are bought only if the kit has too few.
 
-Totals at the reference prices, without shipping: stage 1 about ¥17,800 plus about $150 (of which the bench power
-supply is $119); stage 2 about ¥38,700 plus about $140. Both stages: about ¥56,500 plus about $290, about ¥100,000
-at about ¥150 per US dollar. The bench power supply can also be bought in Japan for about ¥9,500-12,000 (similar
-30 V, 10 A supplies); either is fine as long as it has a current limit.
+Totals at the reference prices, without shipping: stage 1 about ¥29,800 plus about $31; stage 2 about ¥38,700 plus
+about $140. Both stages: about ¥68,500 plus about $171, about ¥94,000 at about ¥150 per US dollar. The bench power
+supply is bought in Japan (maintainer's choice, 2026-11-25); its price is an estimate from listings of similar
+30 V, 10 A supplies (about ¥9,500-12,000), the upper end is used.
 
 ## Not yet decided
 
