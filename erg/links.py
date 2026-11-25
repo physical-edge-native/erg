@@ -95,12 +95,18 @@ class Network:
     """
 
     def __init__(self, links: str, loss: float = 0.0, lat_us: int = 0, jitter_us: int = 0, seed: int = 0,
-                 period_us: int = 20_000, module: Links | None = None):
-        self._m = module or Links()
-        r = self._m.ex["erg_net_new"](self._m.store, LINKS[links], float(loss), lat_us, jitter_us, seed, period_us)
+                 period_us: int = 20_000):
+        self._m = Links()  # each network has its own instance: the module holds one network
+        self.setting = (LINKS[links], float(loss), lat_us, jitter_us, period_us)
+        self.links = links
+        self.reset(seed)
+
+    def reset(self, seed: int):
+        """Start the network again from `seed`, with the same setting."""
+        code, loss, lat_us, jitter_us, period_us = self.setting
+        r = self._m.ex["erg_net_new"](self._m.store, code, loss, lat_us, jitter_us, seed, period_us)
         if r != 0:
             raise ValueError(f"erg_net_new rejected the setting ({r})")
-        self.links = links
 
     def targets(self, leg: int) -> list[int]:
         """The legs that `leg` sends to, in increasing order."""

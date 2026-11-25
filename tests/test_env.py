@@ -60,7 +60,7 @@ def test_observation_matches_state():
         touch = d.sensordata[env.model.sensor(f"{leg}_touch").adr[0]]
         assert touch > 0 and o[15] == 1.0  # standing: every foot is pressed
         assert np.array_equal(o[16:19], COMMAND)
-        assert np.array_equal(o[19:], np.eye(N_LEGS)[i])
+        assert np.array_equal(o[19:23], np.eye(N_LEGS)[i])
 
 
 def test_actions_are_clipped():
