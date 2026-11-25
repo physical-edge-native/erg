@@ -1,0 +1,23 @@
+[package]
+name = "erg-links"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/physical-edge-native/erg"
+description = "WebAssembly module: messages between the legs of the erg robot, in Dyne's wire format"
+
+[lib]
+# cdylib = the WebAssembly module called from Python with wasmtime; rlib = native unit tests
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Dyne's single definition of the message format, from the pinned submodule (one place for the pinned version).
+dyne-wire = { path = "../../third_party/dyne/crates/dyne-wire" }
+
+[profile.release]
+panic = "abort"
+opt-level = "z"
+lto = true
+
+# Built on its own (like Dyne's actors), not as part of a workspace.
+[workspace]

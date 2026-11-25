@@ -66,7 +66,7 @@ erg adds message delay and loss.
 
 | Point | Decision | Reason |
 |---|---|---|
-| (d) Message from a leg to its neighbours, once per control step | its body-orientation estimate (gravity direction, 3 values) and angular velocity (3), its foot contact (1), and a short learned vector (4 values); 11 values as one Dyne band message (24-byte header + 88 bytes = 112 bytes) | fits in one ESP-NOW packet (up to 250 bytes); the learned vector lets legs share what they need without fixing it by hand |
+| (d) Message from a leg to its neighbours, once per control step | its body-orientation estimate (gravity direction, 3 values) and angular velocity (3), its foot contact (1), and a short learned vector (4 values); 11 values as one Dyne band message (24-byte header + 8 bytes of count and per-point fields + 88 bytes of values = 120 bytes; corrected on 2026-11-25 in #33, the first version said 112 bytes and left out the count and per-point fields) | fits in one ESP-NOW packet (up to 250 bytes); the learned vector lets legs share what they need without fixing it by hand |
 | (e) Sensing, without cameras | per joint: position, speed, load; per leg: IMU (accelerometer and gyroscope), foot contact by a microswitch (about ¥300); servo load as a second contact signal | the cheapest reliable contact signal; force pads cost about 10 times more |
 | Control period | 20 ms (50 Hz) | reading three servos takes well under 1 ms at 1 Mbps (to be measured); ESP-NOW round trips are a few milliseconds |
 | The central policy on hardware | one microcontroller with all 12 servos on its bus, no radio | this is how a conventional small robot is built; it is the honest baseline, with no message delay |
