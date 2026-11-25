@@ -16,6 +16,7 @@ its quantities match the MuJoCo model.
 | Frame | Printed by an outside printing service | No 3D printer at hand. The frame design is a separate issue |
 | Where the list lives | In this public repository, with list prices and their sources | Anyone can rebuild the robot from it. Prices actually paid are kept private |
 | Availability | Prefer parts that are unlikely to go out of stock; give a second source where one exists | Stock of the servo at one Japanese shop was seen both in stock and sold out on the same day |
+| Power for stage 1 | A bench power supply with an adjustable current limit, set to 7.4 V | The servo's stall current is not clear from the translated datasheet (both 650 mA and 2.5 A appear); the limit keeps the first runs safe, and the same supply measures the current needed to choose the battery |
 
 ## How to read `hardware/bom.csv`
 
@@ -35,7 +36,6 @@ plus about $51.
 ## Not yet decided
 
 - **Frame**: shape, material and printing service (separate issue).
-- **Power for stage 1**: a bench power supply with a current limit, or a two-cell lithium-polymer battery (7.4 V)
-  with its charger. The servo's stall current is not clear from the translated datasheet; it is to be measured
-  with a current-limited supply before the battery is chosen.
+- **Bench power supply model** (voltage and current range) and the **microswitch part number**: to be added to
+  `hardware/bom.csv` once chosen.
 - **Battery size, power wiring, cables and connectors** for the whole robot.
