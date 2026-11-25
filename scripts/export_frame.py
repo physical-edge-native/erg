@@ -1,9 +1,9 @@
-"""Write the printed parts of one leg (erg/frame.py) as STEP and STL files for a printing service.
+"""Write the printed parts of one leg (erg/frame.py) as STEP and STL files for printing (PLA, 100 % infill).
 
 Usage: uv run python scripts/export_frame.py [output directory, default build/frame]
 
 The files are not kept in the repository; they are made again from erg/frame.py whenever needed.
-Check the servo dimensions on a real servo before ordering (see docs/design/2026-11-25-first-leg-frame.md).
+Check the servo dimensions on a real servo, with a test fit of one part, before printing the whole leg (see docs/design/2026-11-25-first-leg-frame.md).
 """
 
 import sys

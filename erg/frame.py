@@ -4,7 +4,7 @@ The leg is built from U-shaped brackets ("yokes"), the usual way of joining hobb
 the output horn of one servo on one side and the idler (the free bearing on the opposite face) on the other side,
 and carries the next servo by an end cap screwed to that servo's top and bottom faces at its far end.
 
-Printed parts of one leg (printed in PA12 nylon by an outside service, decision of 2026-11-25):
+Printed parts of one leg (PLA, 100 % infill, on a Bambu Lab X2D fused-filament printer; decision of 2026-11-25):
 
 - ``stand``: end cap of the abduction servo with a flat foot, to fix one leg on a bench (stage 1 of the parts list);
 - ``hip``: yoke of the abduction joint + end cap of the hip flexion servo;
@@ -44,9 +44,12 @@ BOTTOM_PLATE = ((-17.5, -7.5), (-10.0, 10.0), (-17.7, -SERVO_FACE))
 SERVO_MASS = 0.055  # kg, design record
 
 # --- Frame ----------------------------------------------------------------------------------------------------------
-PA12_DENSITY = 1.01e-6  # kg/mm^3 (1.01 g/cm^3, PA12 printed by multi jet fusion)
-CLEARANCE_HOLE = 2.7  # for the horn screws (to be matched to the screws that come with the servo)
-FRAME_SCREW_HOLE = 2.2  # for M2 self-tapping screws into the servo's 1.5 mm pilot holes
+MATERIAL_DENSITY = 1.24e-6  # kg/mm^3 (PLA, 1.24 g/cm^3, printed with 100 % infill)
+# Holes are drawn 0.3 mm larger than the screw's usual clearance hole, because fused-filament printing makes holes
+# come out smaller than drawn.
+CLEARANCE_HOLE = 3.0  # for the horn screws (to be matched to the screws that come with the servo)
+FRAME_SCREW_HOLE = 2.5  # for M2 self-tapping screws into the servo's 1.5 mm pilot holes
+WOOD_SCREW_HOLE = 3.7  # for M3 wood screws through the stand
 WALL = 3.0
 BASE = 4.0
 ARM = 4.0
@@ -74,7 +77,7 @@ class Part:
 
     @property
     def mass(self) -> float:
-        return self.solid.volume * PA12_DENSITY
+        return self.solid.volume * MATERIAL_DENSITY
 
 
 def servo_envelope() -> Solid:
@@ -154,7 +157,7 @@ def stand_part() -> Part:
     solid = cap + foot
     for y in (-22.0, 22.0):
         for z in (-22.0, 22.0):
-            solid -= Pos(-SERVO_LENGTH / 2 - WALL - BASE / 2, y, z) * (Rot(0, 90, 0) * Cylinder(1.7, BASE + 0.2))
+            solid -= Pos(-SERVO_LENGTH / 2 - WALL - BASE / 2, y, z) * (Rot(0, 90, 0) * Cylinder(WOOD_SCREW_HOLE / 2, BASE + 0.2))
     return Part("stand", solid)
 
 
@@ -252,7 +255,7 @@ def body_inertials() -> dict[str, tuple[float, tuple, tuple]]:
     servo_density = SERVO_MASS / servo_envelope().volume
     out = {}
     for body, names in BODY_CONTENTS.items():
-        items = [(solids[n], servo_density if n.endswith("_servo") else PA12_DENSITY) for n in names]
+        items = [(solids[n], servo_density if n.endswith("_servo") else MATERIAL_DENSITY) for n in names]
         masses = [s.volume * rho for s, rho in items]
         centres = [np.array(tuple(s.center())) for s, _ in items]
         m = sum(masses)
