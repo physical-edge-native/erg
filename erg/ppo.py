@@ -28,13 +28,18 @@ from torch import nn
 from erg import reward as rw
 from erg import robot
 from erg.env import (
-    ACT_SIZE, CENTRAL_ACT_SIZE, CENTRAL_OBS_SIZE, LEARNED, N_LEGS, OBS_SIZE, SENSOR_SIZE, Env,
+    ACT_SIZE, CENTRAL_ACT_SIZE, CENTRAL_OBS_SIZE, CONTACT_THRESHOLD, LEARNED, N_LEGS, OBS_SIZE, SENSOR_SIZE, Env,
+    draw_command,
 )
 
 ACTOR_HIDDEN = (48, 48)
 CRITIC_HIDDEN = (128, 128)
 ACTION_SCALE = 0.5  # rad per unit of action, around the standing posture
 EPISODE_STEPS = 500  # 10 s at 20 ms
+# Command curriculum (#49): commands are drawn in the full ranges scaled by a factor that grows linearly from
+# CURRICULUM_START to 1 over the first CURRICULUM_FRACTION of the training steps.
+CURRICULUM_START = 0.3
+CURRICULUM_FRACTION = 0.3
 STAND = robot.STAND.reshape(N_LEGS, ACT_SIZE)
 
 
@@ -106,6 +111,7 @@ class Worker:
         self.cfg = cfg
         self.index = index
         self.episode = 0
+        self.command_scale = 1.0
         self.env = Env(central=cfg.form == "central", links=cfg.links, loss=cfg.loss, lat_us=cfg.lat_us,
                        jitter_us=cfg.jitter_us, wire=False)
         self.reset()
@@ -113,9 +119,16 @@ class Worker:
     def reset(self):
         seed = (self.cfg.seed * 1_000_003 + self.index) * 100_003 + self.episode
         self.episode += 1
-        self.obs = self.env.reset(seed)
+        command = draw_command(np.random.Generator(np.random.PCG64([seed, 1]))) * self.command_scale
+        self.obs = self.env.reset(seed, command)
         self.steps = 0
         self.prev_targets = robot.STAND.copy()
+        self.in_contact = self.contacts()
+        self.air_time = np.zeros(N_LEGS)
+
+    def contacts(self) -> np.ndarray:
+        d = self.env.data
+        return np.array([d.sensor(f"{leg}_touch").data[0] > CONTACT_THRESHOLD for leg in robot.LEGS])
 
     def actor_obs(self) -> np.ndarray:
         return self.obs  # (4, OBS_SIZE) per-leg, or (CENTRAL_OBS_SIZE,) central
@@ -136,6 +149,12 @@ class Worker:
         self.obs = self.env.step(env_action)
         targets = np.clip(targets, self.env.model.actuator_ctrlrange[:, 0], self.env.model.actuator_ctrlrange[:, 1])
         r, fell = rw.reward(self.env.data, self.env.command, targets, self.prev_targets)
+        contact = self.contacts()
+        touchdown = contact & ~self.in_contact
+        self.air_time += robot.CONTROL_PERIOD
+        r += rw.air_time_reward(touchdown, self.air_time, self.env.command)
+        self.air_time[contact] = 0.0
+        self.in_contact = contact
         self.prev_targets = targets
         self.steps += 1
         return r, fell
@@ -155,6 +174,9 @@ def train(cfg: Config, total_steps: int, progress=None) -> tuple[Agent, dict]:
     t_env = t_update = 0.0
     steps_done = 0
     while steps_done < total_steps:
+        scale = min(1.0, CURRICULUM_START + (1 - CURRICULUM_START) * steps_done / (CURRICULUM_FRACTION * total_steps))
+        for w in workers:
+            w.command_scale = scale
         a_obs, c_obs, acts, logps, rews, dones, vals = [], [], [], [], [], [], []
         t0 = time.perf_counter()
         for _ in range(cfg.rollout):
@@ -222,7 +244,8 @@ def train(cfg: Config, total_steps: int, progress=None) -> tuple[Agent, dict]:
                 opt.step()
                 losses.append((pg.item(), vl.item()))
         t_update += time.perf_counter() - t1
-        entry = {"steps": steps_done, "mean_reward": float(rews.mean()), "falls": int(dones.sum()),
+        entry = {"steps": steps_done, "command_scale": scale, "mean_reward": float(rews.mean()),
+                 "falls": int(dones.sum()),
                  "policy_loss": float(np.mean([l[0] for l in losses])),
                  "value_loss": float(np.mean([l[1] for l in losses]))}
         cfg.log.append(entry)
