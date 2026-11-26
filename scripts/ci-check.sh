@@ -9,5 +9,6 @@ test -f third_party/dyne/scripts/onnx_import.py || {
   echo "Dyne submodule missing: run 'git submodule update --init'" >&2; exit 1; }
 
 uv sync --locked
+cargo test --quiet --locked --manifest-path crates/erg-links/Cargo.toml --target-dir target/erg-links-test
 uv run pytest -q
 echo "ci-check: PASS"
