@@ -11,9 +11,10 @@ Observation of one leg (OBS_SIZE values, in this order):
     accelerometer (3)     m/s^2, in the torso frame, gravity included (reads about +9.81 on z at rest)
     gyroscope (3)         rad/s, in the torso frame
     foot contact (1)      1.0 if the touch sensor reads more than CONTACT_THRESHOLD, else 0.0
+    gait phase (2)        cosine and sine of 2 pi times the phase of the leg's own gait clock (Issue #51)
     command (3)           forward speed m/s, sideways speed m/s, turning speed rad/s
     leg identifier (4)    one-hot, in the order of robot.LEGS
-    messages (3 x 12)     one slot per other leg, in the order of robot.LEGS (Issue #35): the 11 values of the
+    messages (3 x 14)     one slot per other leg, in the order of robot.LEGS (Issue #35): the 13 values of the
                           last message received from that leg (zeros if none) and its age in control steps since
                           it was sent, capped at AGE_CAP (AGE_CAP if none). A leg that is not linked to this one
                           (link setting "none", or the diagonal leg with "neighbours") always reads zeros and
@@ -22,14 +23,21 @@ Observation of one leg (OBS_SIZE values, in this order):
 Action of one leg: target angles (rad) of its three joints, clipped to the joint ranges, optionally followed by
 the LEARNED values it sends to the legs it is linked to (clipped to [-1, 1]; zeros if not given).
 
+Gait clocks (Issue #51): each leg has its own clock, a phase in [0, 1) that starts at the trot offsets of
+erg.gait.PHASE and advances each control step by CONTROL_PERIOD / erg.gait.PERIOD times (1 + FREQ_RANGE * f), where
+f in [-1, 1] is the frequency correction given for that leg (zero if none). No clock reads another; the legs can
+keep step only through their messages. The controllers use the phase to follow the base gait (erg.gait.leg_targets).
+
 Messages (Issue #35): after each control step, each leg sends its gravity direction (the accelerometer reading
-divided by its length, 3), angular velocity (gyroscope, 3), foot contact (1) and its LEARNED values (4), encoded in
+divided by its length, 3), angular velocity (gyroscope, 3), foot contact (1), its LEARNED values (4) and its gait
+phase (cosine and sine, 2; Issue #51), encoded in
 Dyne's wire format (erg.links) and carried by Dyne's virtual network (loss, delay, jitter; erg.links.Network). A
 message sent after step k reaches its receiver at step k + 1 at the earliest.
 
 Central mode (Issue #13), for comparison on the same body: one policy sees all sensors and commands all 12 joints,
 with no messages between legs. Its observation (CENTRAL_OBS_SIZE values) is each leg's sensor values above (joints,
-IMU, foot contact; 16 per leg, in the order of robot.LEGS) followed by the command once; there is no leg identifier.
+IMU, foot contact) and gait phase (18 per leg, in the order of robot.LEGS) followed by the command once; there is no
+leg identifier. It has the same four independent gait clocks.
 Its action is the 12 target angles in the order of robot.JOINT_NAMES. Only the controller differs between the modes:
 the same joint commands give the same physical state bit for bit.
 """
@@ -38,17 +46,20 @@ import mujoco
 import numpy as np
 
 from erg import links as links_mod
-from erg import robot
+from erg import gait, robot
 
 N_LEGS = len(robot.LEGS)
 SENSOR_SIZE = 3 + 3 + 3 + 3 + 3 + 1  # one leg's own sensor values
 LEARNED = 4  # learned values in each message
-MSG_VALUES = 3 + 3 + 1 + LEARNED  # values in one leg's message (erg.links.N_VALUES)
+PHASE_SIZE = 2  # cosine and sine of the gait phase
+LEG_SIZE = SENSOR_SIZE + PHASE_SIZE  # one leg's own values: sensors and gait phase
+MSG_VALUES = 3 + 3 + 1 + LEARNED + PHASE_SIZE  # values in one leg's message (erg.links.N_VALUES)
+FREQ_RANGE = 0.5  # a gait clock runs between 0.5 and 1.5 times the base frequency 1 / erg.gait.PERIOD
 AGE_CAP = 10  # control steps (0.2 s); the age of a message, and the age read when no message has arrived
 MSG_SLOT = MSG_VALUES + 1
-OBS_SIZE = SENSOR_SIZE + 3 + N_LEGS + (N_LEGS - 1) * MSG_SLOT
+OBS_SIZE = LEG_SIZE + 3 + N_LEGS + (N_LEGS - 1) * MSG_SLOT
 ACT_SIZE = len(robot.JOINTS_PER_LEG)
-CENTRAL_OBS_SIZE = N_LEGS * SENSOR_SIZE + 3
+CENTRAL_OBS_SIZE = N_LEGS * LEG_SIZE + 3
 CENTRAL_ACT_SIZE = N_LEGS * ACT_SIZE
 
 # Foot force above which the microswitch is taken as pressed. An estimate, to be set from the chosen switch.
@@ -93,6 +104,7 @@ class Env:
         self.wire = links_mod.Links() if (wire and not central) else None
         self.step_count = 0
         self.learned = np.zeros((N_LEGS, LEARNED))
+        self.phase = np.array([gait.PHASE[leg] for leg in robot.LEGS])
         self._inbox = []  # (delivery step, source, destination, message bytes)
         self._vals = np.zeros((N_LEGS, N_LEGS, MSG_VALUES))  # newest values received, [receiver, sender]
         self._sent = np.full((N_LEGS, N_LEGS), -1, dtype=np.int64)  # step at which they were sent; -1: none
@@ -126,6 +138,7 @@ class Env:
         self.command = drawn if command is None else np.asarray(command, dtype=np.float64).copy()
         self.step_count = 0
         self.learned[:] = 0.0
+        self.phase = np.array([gait.PHASE[leg] for leg in robot.LEGS])
         self._inbox = []
         self._vals[:] = 0.0
         self._sent[:] = -1
@@ -133,10 +146,12 @@ class Env:
             self.network.reset(seed)
         return self.observe()
 
-    def step(self, actions) -> np.ndarray:
+    def step(self, actions, freq=None) -> np.ndarray:
         """Apply the joint targets (shape (4, 3), or (12,) in central mode) for one control period; returns the
         observations. In the per-leg mode the actions may be (4, 3 + LEARNED): joint targets, then the learned
-        values each leg sends."""
+        values each leg sends. `freq` (4 values, clipped to [-1, 1]; zeros if None) corrects each leg's gait clock
+        frequency for this step."""
+        f = np.zeros(N_LEGS) if freq is None else np.clip(np.asarray(freq, dtype=np.float64), -1.0, 1.0)
         a = np.asarray(actions, dtype=np.float64)
         if not self.central and a.shape == (N_LEGS, ACT_SIZE + LEARNED):
             self.learned = np.clip(a[:, ACT_SIZE:], -1.0, 1.0)
@@ -150,13 +165,14 @@ class Env:
         # mj_step computes the sensors before it integrates; recompute them for the state reached.
         mujoco.mj_forward(self.model, self.data)
         self.step_count += 1
+        self.phase = (self.phase + robot.CONTROL_PERIOD / gait.PERIOD * (1.0 + FREQ_RANGE * f)) % 1.0
         if self.network is not None:
             self._exchange(self.step_count)
         return self.observe()
 
     def message_values(self) -> np.ndarray:
         """What each leg sends now, shape (4, MSG_VALUES): gravity direction, angular velocity, foot contact,
-        learned values."""
+        learned values, gait phase."""
         sd = self.data.sensordata
         out = np.empty((N_LEGS, MSG_VALUES))
         for i, leg in enumerate(robot.LEGS):
@@ -164,7 +180,7 @@ class Env:
             norm = np.linalg.norm(acc)
             gravity = acc / norm if norm > 0 else np.zeros(3)
             touch = 1.0 if sd[self._sensor[leg, "touch"]][0] > CONTACT_THRESHOLD else 0.0
-            out[i] = np.concatenate([gravity, sd[self._sensor[leg, "gyro"]], [touch], self.learned[i]])
+            out[i] = np.concatenate([gravity, sd[self._sensor[leg, "gyro"]], [touch], self.learned[i], self.phase_values()[i]])
         return out
 
     def _exchange(self, t: int):
@@ -204,17 +220,23 @@ class Env:
                     out[r, j, MSG_VALUES] = min(AGE_CAP, self.step_count - self._sent[r, s_])
         return out
 
+    def phase_values(self) -> np.ndarray:
+        """Cosine and sine of each leg's gait phase, shape (4, 2)."""
+        a = 2.0 * np.pi * self.phase
+        return np.stack([np.cos(a), np.sin(a)], axis=1)
+
     def observe(self) -> np.ndarray:
         """Observations of all legs, shape (4, OBS_SIZE); in central mode, shape (CENTRAL_OBS_SIZE,)."""
         legs = self._observe_legs()
         if self.central:
-            return np.concatenate([legs[:, :SENSOR_SIZE].ravel(), self.command])
+            return np.concatenate([legs[:, :LEG_SIZE].ravel(), self.command])
         return legs
 
     def _observe_legs(self) -> np.ndarray:
         sd = self.data.sensordata
         slots = self.message_slots()
         obs = np.empty((N_LEGS, OBS_SIZE))
+        phase = self.phase_values()
         for i, leg in enumerate(robot.LEGS):
             touch = sd[self._sensor[leg, "touch"]][0]
             obs[i] = np.concatenate([
@@ -224,6 +246,7 @@ class Env:
                 sd[self._sensor[leg, "acc"]],
                 sd[self._sensor[leg, "gyro"]],
                 [1.0 if touch > CONTACT_THRESHOLD else 0.0],
+                phase[i],
                 self.command,
                 np.eye(N_LEGS)[i],
                 slots[i].ravel(),

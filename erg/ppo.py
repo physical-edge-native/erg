@@ -1,9 +1,11 @@
 """PPO (proximal policy optimization) on the CPU, for both forms of control (Issue #42).
 
 - **Per-leg form** ("split"): one actor network shared by the four legs; each leg's actor sees only its own
-  observation (its sensors, the command, its leg identifier and its neighbours' messages) and outputs its 3 joint
-  targets and its learned message values. The joint action of the robot is the four legs' actions together.
-- **Central form**: one actor sees the central observation and outputs the 12 joint targets.
+  observation (its sensors, its gait phase, the command, its leg identifier and its neighbours' messages) and
+  outputs corrections to its 3 joint targets, its learned message values and the frequency correction of its gait
+  clock. The joint action of the robot is the four legs' actions together.
+- **Central form**: one actor sees the central observation and outputs the 12 joint corrections and the 4
+  frequency corrections.
 
 Both forms are trained with the same algorithm, the same reward (erg.reward), the same budget of environment
 steps, and the same critic: a value network on the central observation (every leg's sensors and the command),
@@ -11,7 +13,9 @@ used only during training and never on the robot.
 
 Actors are ReLU networks with ACTOR_HIDDEN units per layer (bit-exact in Dyne's WebAssembly runtime; under the
 8,192-parameter limit of Dyne's full mlp-actor). Actions are Gaussian with a learned, state-independent standard
-deviation; the mean is used on the robot. A joint target is robot.STAND + ACTION_SCALE * action.
+deviation; the mean is used on the robot. Since #51 both forms correct a base gait (stepping in place, trot phases,
+erg.gait.leg_targets) driven by each leg's own clock (erg.env): a joint target is the base gait's target at the
+leg's phase + ACTION_SCALE * correction (it was robot.STAND + 0.5 rad * action before #51).
 
 Runs are deterministic: one thread for PyTorch, seeded generators, environments stepped in a fixed order.
 """
@@ -25,22 +29,21 @@ import numpy as np
 import torch
 from torch import nn
 
+from erg import gait, robot
 from erg import reward as rw
-from erg import robot
 from erg.env import (
-    ACT_SIZE, CENTRAL_ACT_SIZE, CENTRAL_OBS_SIZE, CONTACT_THRESHOLD, LEARNED, N_LEGS, OBS_SIZE, SENSOR_SIZE, Env,
+    ACT_SIZE, CENTRAL_ACT_SIZE, CENTRAL_OBS_SIZE, CONTACT_THRESHOLD, LEARNED, LEG_SIZE, N_LEGS, OBS_SIZE, Env,
     draw_command,
 )
 
 ACTOR_HIDDEN = (48, 48)
 CRITIC_HIDDEN = (128, 128)
-ACTION_SCALE = 0.5  # rad per unit of action, around the standing posture
+ACTION_SCALE = 0.25  # rad per unit of correction, around the base gait (0.5 around the standing posture before #51)
 EPISODE_STEPS = 500  # 10 s at 20 ms
 # Command curriculum (#49): commands are drawn in the full ranges scaled by a factor that grows linearly from
 # CURRICULUM_START to 1 over the first CURRICULUM_FRACTION of the training steps.
 CURRICULUM_START = 0.3
 CURRICULUM_FRACTION = 0.3
-STAND = robot.STAND.reshape(N_LEGS, ACT_SIZE)
 
 
 @dataclass
@@ -84,11 +87,11 @@ class Agent(nn.Module):
         super().__init__()
         self.form = form
         if form == "split":
-            self.act_dim = ACT_SIZE + LEARNED
+            self.act_dim = ACT_SIZE + LEARNED + 1  # joint corrections, learned values, clock frequency correction
             self.actor = mlp(OBS_SIZE, ACTOR_HIDDEN, self.act_dim)
             self.log_std = nn.Parameter(torch.full((self.act_dim,), -1.0, dtype=torch.float64))
         elif form == "central":
-            self.act_dim = CENTRAL_ACT_SIZE
+            self.act_dim = CENTRAL_ACT_SIZE + N_LEGS  # 12 joint corrections, then 4 clock frequency corrections
             self.actor = mlp(CENTRAL_OBS_SIZE, ACTOR_HIDDEN, self.act_dim)
             self.log_std = nn.Parameter(torch.full((self.act_dim,), -1.0, dtype=torch.float64))
         else:
@@ -101,8 +104,14 @@ class Agent(nn.Module):
 
 
 def central_obs(obs_split: np.ndarray) -> np.ndarray:
-    """The central observation (every leg's sensors, then the command) from the per-leg observations."""
-    return np.concatenate([obs_split[:, :SENSOR_SIZE].ravel(), obs_split[0, SENSOR_SIZE:SENSOR_SIZE + 3]])
+    """The central observation (every leg's sensors and gait phase, then the command) from the per-leg ones."""
+    return np.concatenate([obs_split[:, :LEG_SIZE].ravel(), obs_split[0, LEG_SIZE:LEG_SIZE + 3]])
+
+
+def base_targets(phase: np.ndarray) -> np.ndarray:
+    """Joint targets of the base gait (stepping in place) at each leg's phase, shape (4, 3). Each leg's only
+    depend on its own phase, so a leg's controller can compute them alone."""
+    return np.stack([gait.leg_targets(p) for p in phase])
 
 
 class Worker:
@@ -123,7 +132,7 @@ class Worker:
         command = draw_command(np.random.Generator(np.random.PCG64([seed, 1]))) * self.command_scale
         self.obs = self.env.reset(seed, command)
         self.steps = 0
-        self.prev_targets = robot.STAND.copy()
+        self.prev_targets = base_targets(self.env.phase).ravel()
         self.in_contact = self.contacts()
         self.air_time = np.zeros(N_LEGS)
 
@@ -140,14 +149,18 @@ class Worker:
     def step(self, action: np.ndarray) -> tuple[float, bool]:
         """Apply one action (raw policy output); returns the reward and whether the episode ended by a fall
         (time limits end episodes too, but are not falls)."""
+        base = base_targets(self.env.phase)
         if self.cfg.form == "split":
-            a = action.reshape(N_LEGS, ACT_SIZE + LEARNED)
-            env_action = np.concatenate([STAND + ACTION_SCALE * a[:, :ACT_SIZE], a[:, ACT_SIZE:]], axis=1)
+            a = action.reshape(N_LEGS, ACT_SIZE + LEARNED + 1)
+            env_action = np.concatenate([base + ACTION_SCALE * a[:, :ACT_SIZE], a[:, ACT_SIZE:ACT_SIZE + LEARNED]],
+                                        axis=1)
             targets = env_action[:, :ACT_SIZE].ravel()
+            freq = a[:, ACT_SIZE + LEARNED]
         else:
-            env_action = robot.STAND + ACTION_SCALE * action
+            env_action = base.ravel() + ACTION_SCALE * action[:CENTRAL_ACT_SIZE]
             targets = env_action
-        self.obs = self.env.step(env_action)
+            freq = action[CENTRAL_ACT_SIZE:]
+        self.obs = self.env.step(env_action, freq)
         targets = np.clip(targets, self.env.model.actuator_ctrlrange[:, 0], self.env.model.actuator_ctrlrange[:, 1])
         r, fell = rw.reward(self.env.data, self.env.command, targets, self.prev_targets)
         contact = self.contacts()

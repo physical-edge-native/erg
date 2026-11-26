@@ -59,8 +59,10 @@ def test_observation_matches_state():
         assert abs(o[11] - 9.81) < 0.05 and np.max(np.abs(o[9:11])) < 0.05
         touch = d.sensordata[env.model.sensor(f"{leg}_touch").adr[0]]
         assert touch > 0 and o[15] == 1.0  # standing: every foot is pressed
-        assert np.array_equal(o[16:19], COMMAND)
-        assert np.array_equal(o[19:23], np.eye(N_LEGS)[i])
+        a = 2 * np.pi * env.phase[i]
+        assert np.array_equal(o[16:18], [np.cos(a), np.sin(a)])  # gait phase (#51)
+        assert np.array_equal(o[18:21], COMMAND)
+        assert np.array_equal(o[21:25], np.eye(N_LEGS)[i])
 
 
 def test_actions_are_clipped():
@@ -80,12 +82,12 @@ def test_foot_in_air_reads_no_contact():
 
 def test_commands_are_drawn_inside_the_ranges():
     env = Env()
-    drawn = np.array([env.reset(seed)[0, 16:19] for seed in range(200)])
+    drawn = np.array([env.reset(seed)[0, 18:21] for seed in range(200)])
     assert np.all(np.abs(drawn) <= COMMAND_MAX)
     assert np.all(drawn.min(axis=0) < 0) and np.all(drawn.max(axis=0) > 0)  # both directions
-    again = np.array([env.reset(seed)[0, 16:19] for seed in range(5)])
+    again = np.array([env.reset(seed)[0, 18:21] for seed in range(5)])
     assert np.array_equal(again.view(np.uint64), drawn[:5].view(np.uint64))
-    assert np.array_equal(env.reset(0, COMMAND)[0, 16:19], COMMAND)
+    assert np.array_equal(env.reset(0, COMMAND)[0, 18:21], COMMAND)
 
 
 def test_forward_limit_is_within_the_servo_speed():
