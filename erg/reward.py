@@ -9,6 +9,7 @@ term changed in #49 after the first pilot run stood still instead of walking). P
            - W_ACTION_RATE * mean((joint targets - previous)^2)        smooth commands
            + W_AIR * sum over feet touching down now of (air time - AIR_TARGET), only while moving is commanded
            - W_FALL if the robot fell (and the episode ends)
+    then clipped below at zero (as in legged_gym), so that being alive is never worse than ending the episode
 
 v_xy is the torso's horizontal velocity in its own heading frame (forward, left), w_z its turning rate, and
 c = (c_xy, c_turn) the command. The robot has fallen when the torso is lower than FALL_HEIGHT or tilts more than
@@ -23,13 +24,13 @@ W_SPEED = 1.0
 SIGMA_SPEED = 0.25  # m/s (0.1 before #49)
 W_TURN = 0.5
 SIGMA_TURN = 0.5  # rad/s (0.3 before #49)
-W_AIR = 0.5
-AIR_TARGET = 0.15  # s; steps shorter than this are penalized, longer ones rewarded
+W_AIR = 1.0  # 0.5 in the second pilot; the same weight as speed tracking, as in legged_gym
+AIR_TARGET = 0.2  # s (0.15 in the second pilot); steps shorter than this are penalized, longer ones rewarded
 MOVE_SPEED = 0.05  # m/s; below this (and below MOVE_TURN) the command asks to stand still
 MOVE_TURN = 0.1  # rad/s
 W_TORQUE = 0.05
 W_ACTION_RATE = 0.01
-W_FALL = 2.0
+W_FALL = 0.0  # 2.0 before the third pilot; a fall now only ends the episode, as in legged_gym
 FALL_HEIGHT = 0.12  # m (standing: about 0.22 m)
 FALL_TILT = np.radians(45.0)
 
@@ -63,6 +64,11 @@ def reward(data, command, targets, previous_targets) -> tuple[float, bool]:
     if fell:
         r -= W_FALL
     return float(r), bool(fell)
+
+
+def clip_total(r: float) -> float:
+    """The step's total reward clipped below at zero."""
+    return max(0.0, r)
 
 
 def moving_commanded(command) -> bool:

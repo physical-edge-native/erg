@@ -59,8 +59,9 @@ class Config:
     clip: float = 0.2
     lr: float = 3e-4
     value_coef: float = 0.5
+    entropy_coef: float = 0.01  # 0 before the third pilot (#49); as in legged_gym
     max_grad_norm: float = 1.0
-    init_log_std: float = -1.0
+    init_log_std: float = -0.5  # -1.0 before the third pilot (#49): more exploration at the start
     seed: int = 0
     log: list = field(default_factory=list)
 
@@ -152,7 +153,7 @@ class Worker:
         contact = self.contacts()
         touchdown = contact & ~self.in_contact
         self.air_time += robot.CONTROL_PERIOD
-        r += rw.air_time_reward(touchdown, self.air_time, self.env.command)
+        r = rw.clip_total(r + rw.air_time_reward(touchdown, self.air_time, self.env.command))
         self.air_time[contact] = 0.0
         self.in_contact = contact
         self.prev_targets = targets
@@ -237,7 +238,8 @@ def train(cfg: Config, total_steps: int, progress=None) -> tuple[Agent, dict]:
                 ratio = (lp - B_lp[idx]).exp()
                 pg = -torch.min(ratio * B_adv[idx], ratio.clamp(1 - cfg.clip, 1 + cfg.clip) * B_adv[idx]).mean()
                 vl = ((agent.critic(B_co[idx]).squeeze(-1) - B_ret[idx]) ** 2).mean()
-                loss = pg + cfg.value_coef * vl
+                ent = d.entropy().reshape(len(idx), -1).sum(-1).mean()
+                loss = pg + cfg.value_coef * vl - cfg.entropy_coef * ent
                 opt.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(agent.parameters(), cfg.max_grad_norm)
