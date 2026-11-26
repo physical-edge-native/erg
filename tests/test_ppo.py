@@ -5,6 +5,9 @@ Pass criteria:
 - for both forms, a very short training (1,024 environment steps, 2 environments) run twice with the same seed
   gives the same weights bit for bit, and a different seed gives different weights; every logged loss is finite;
 - the reward rewards tracking: standing still scores higher with a zero command than with a forward command;
+  the air-time reward (#49) is zero when no foot touches down or standing still is commanded, positive for a long
+  step and negative for a very short one while moving is commanded; the command curriculum grows from
+  CURRICULUM_START to 1 and keeps commands inside the scaled ranges;
   a fall is detected when the torso is low;
 - the time per environment step and per training update is measured and printed (pytest -s).
 """
@@ -57,3 +60,27 @@ def test_reward_tracks_the_command():
     env.data.qpos[2] = 0.05
     mujoco.mj_forward(env.model, env.data)
     assert reward.fallen(env.data)
+
+
+def test_air_time_reward():
+    moving, still = np.array([0.15, 0.0, 0.0]), np.zeros(3)
+    none = np.zeros(4, dtype=bool)
+    one = np.array([True, False, False, False])
+    air = np.array([0.3, 0.0, 0.0, 0.0])
+    assert reward.air_time_reward(none, air, moving) == 0.0  # no foot touches down
+    assert reward.air_time_reward(one, air, still) == 0.0  # standing still is commanded
+    assert reward.air_time_reward(one, air, moving) > 0.0  # a long step while moving is commanded
+    assert reward.air_time_reward(one, np.array([0.05, 0, 0, 0]), moving) < 0.0  # a very short step
+
+
+def test_command_curriculum():
+    cfg = ppo.Config(form="central", n_envs=2, rollout=32, seed=5)
+    ppo.train(cfg, 640)
+    scales = [e["command_scale"] for e in cfg.log]
+    assert scales[0] == ppo.CURRICULUM_START
+    assert all(a <= b for a, b in zip(scales, scales[1:])) and scales[-1] == 1.0
+    w = ppo.Worker(cfg, 0)
+    w.command_scale = 0.3
+    for _ in range(50):
+        w.reset()
+        assert np.all(np.abs(w.env.command) <= 0.3 * np.array([0.23, 0.12, 0.8]) + 1e-12)
