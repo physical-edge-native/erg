@@ -26,7 +26,7 @@ parts arrive.
 ## What the bench measures (to be recorded here)
 
 - Servo bus time for reading the three servos, and for the goal packet.
-- Policy time in `mlp-actor` per evaluation on the ESP32-S3 (5,575 parameters, double precision emulated).
+- Policy time in `mlp-actor` per evaluation on the ESP32-S3 (6,008 parameters since #51 gave each leg a gait clock: 67 → 48 → 48 → 8; the full variant of `mlp-actor`, up to 8,192 parameters; double precision emulated).
 - The loop's total time and the jitter of its start against the 20 ms schedule.
 - Whether the policy's outputs are bit for bit those of the PC (`check: bit-exact`).
 
