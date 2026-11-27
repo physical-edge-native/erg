@@ -9,9 +9,10 @@ ordered. This module computes them for any model that follows erg's names (robot
   offset from the support centre, and its height divided by half of the support width (the static sideways tipping
   angle is atan(half width / height));
 - leg mass below the hip flexion joint (the thigh and shank bodies), as a fraction of the total;
-- the hand-made trot of erg.gait at a forward speed: joint torque and joint speed relative to the servo limits
-  (for each joint its 95th percentile over the walk after a settling time, and the largest of these over the
-  joints; and the maximum torque);
+- the hand-made trot of erg.gait at a forward speed: joint torque relative to the stall torque, and the joint speed
+  asked of the servos (the change of the joint targets per control period) relative to the no-load speed; for each
+  joint its 95th percentile over the walk after a settling time, the largest of these over the joints, and the
+  maximum torque;
 - standing up from a crouch (body resting low, legs folded) to the standing posture in STAND_UP_SECONDS: the largest
   joint torque relative to the servo limit. This is the last part of getting up after a fall; rolling over from
   the side is added with the new body (Issue #59).
@@ -47,7 +48,7 @@ class Targets:
     leg_mass_fraction: float  # thigh and shank bodies of all legs / total mass
     trot_torque_p95: float  # of the stall torque: the largest over joints of each joint's 95th percentile in time
     trot_torque_max: float
-    trot_speed_p95: float  # of the no-load speed, the same way
+    trot_speed_p95: float  # commanded joint speed (target change per control period) / no-load speed, the same way
     stand_up_torque_max: float
 
 
@@ -89,7 +90,7 @@ def trot(m: mujoco.MjModel, speed: float = TROT_SPEED) -> tuple[float, float, fl
     d = mujoco.MjData(m)
     robot.reset_standing(m, d)
     substeps = round(robot.CONTROL_PERIOD / m.opt.timestep)
-    torque, joint_speed = [], []
+    torque = []
     t = 0.0
     for k in range(round(TROT_SECONDS / robot.CONTROL_PERIOD)):
         d.ctrl[:] = gait.trot_targets(t, speed)
@@ -98,8 +99,12 @@ def trot(m: mujoco.MjModel, speed: float = TROT_SPEED) -> tuple[float, float, fl
         t += robot.CONTROL_PERIOD
         if t > TROT_SKIP_SECONDS:
             torque.append(np.abs(d.actuator_force) / robot.SERVO_STALL_TORQUE)
-            joint_speed.append(np.abs(d.qvel[6:]) / robot.SERVO_NO_LOAD_SPEED)
-    torque, joint_speed = np.array(torque), np.array(joint_speed)
+    torque = np.array(torque)
+    # the joint speed asked of the servos: the change of the joint targets per control period. The measured joint
+    # velocity also holds the passive vibration after each touch-down, which the servo does not have to drive.
+    ts = np.arange(round(TROT_SECONDS / robot.CONTROL_PERIOD)) * robot.CONTROL_PERIOD
+    targets = np.array([gait.trot_targets(x, speed) for x in ts if x > TROT_SKIP_SECONDS])
+    joint_speed = np.abs(np.diff(targets, axis=0)) / robot.CONTROL_PERIOD / robot.SERVO_NO_LOAD_SPEED
     # the worst joint's 95th percentile: one joint near its limit matters even if the others are idle
     return (float(np.percentile(torque, 95, axis=0).max()), float(torque.max()),
             float(np.percentile(joint_speed, 95, axis=0).max()))

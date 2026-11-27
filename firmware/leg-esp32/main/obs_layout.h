@@ -20,22 +20,22 @@
 #define OBS_LEG_ID 21 /* 4 values */
 #define OBS_SLOTS 25 /* 42 values */
 /* Standing posture of one leg (rad): abduction, hip flexion, knee. */
-#define STAND_ANGLES {0.0, 0.6, -1.2}
+#define STAND_ANGLES {0.0, 0.7951355856763409, -1.540528547532401}
 /* Policy outputs per leg: joint corrections, learned values, then the clock frequency correction. */
 #define ACT_FREQ 7
 #define ACT_SIZE_ALL 8
 /* Joint target = base gait at the leg's phase + ACTION_SCALE * correction (erg.ppo). */
 #define ACTION_SCALE 0.25
 /* Gait clock (erg.env): phase += CLOCK_STEP * (1 + FREQ_RANGE * f), modulo 1. */
-#define CLOCK_STEP 0.05714285714285715
+#define CLOCK_STEP 0.044444444444444446
 #define FREQ_RANGE 0.5
 #define GAIT_PHASE_START {0.0, 0.5, 0.5, 0.0}
 /* Base gait (erg.gait), values computed in Python so that the firmware uses the same bits. */
-#define GAIT_PERIOD 0.35
-#define GAIT_STEP_HEIGHT 0.015
-#define GAIT_STAND_DEPTH 0.1485604106837421
-#define GAIT_THIGH 0.09
-#define GAIT_SHANK 0.09
-#define GAIT_THIGH_SQ 0.0081
-#define GAIT_SHANK_SQ 0.0081
-#define GAIT_TWO_THIGH_SHANK 0.0162
+#define GAIT_PERIOD 0.45
+#define GAIT_STEP_HEIGHT 0.012
+#define GAIT_STAND_DEPTH 0.13999999999999999
+#define GAIT_THIGH 0.095
+#define GAIT_SHANK 0.1
+#define GAIT_THIGH_SQ 0.009025
+#define GAIT_SHANK_SQ 0.010000000000000002
+#define GAIT_TWO_THIGH_SHANK 0.019000000000000003

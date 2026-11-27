@@ -2,7 +2,7 @@
 
 Pass criteria:
 - the model loads; it has 12 hinge joints and 12 position actuators in the order of erg.robot.JOINT_NAMES;
-- the actuators cannot exceed the servo's stall torque, and the total mass is inside the 1.2-2 kg of the design record;
+- the actuators cannot exceed the servo's stall torque, and the total mass is inside 0.9-1.2 kg (the redesign's target, #59);
 - the model keeps to the subset of MJCF that converts to URDF (see the comment at the top of models/quadruped.xml);
 - under a fixed standing command, the robot stands for 10 s: the torso stays above 0.10 m and tilts less than
   10 degrees at every control step, only the feet touch the floor, and no joint torque reaches the stall torque;
@@ -33,7 +33,7 @@ def test_model_structure():
         assert np.array_equal(m.actuator_ctrlrange[i], m.jnt_range[i + 1])
     assert np.allclose(m.dof_damping[6:], robot.SERVO_STALL_TORQUE / robot.SERVO_NO_LOAD_SPEED, rtol=1e-3)
     total = m.body_subtreemass[0]
-    assert 1.2 <= total <= 2.0
+    assert 0.9 <= total <= 1.2  # the redesign's target (docs/design/2026-11-27-redesign.md)
 
 
 def test_model_is_urdf_compatible():
