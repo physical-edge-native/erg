@@ -4,9 +4,15 @@
  * Every CONTROL_PERIOD_US (20 ms) the loop reads the leg's three STS3215 servos on their serial bus (through the
  * Waveshare Bus Servo Adapter (A)), the LSM6DSOX IMU on I2C and the foot switch on a GPIO, builds the leg's
  * observation in the order of the training environment (leg.c, obs_layout.h), runs the policy in Dyne's mlp-actor
- * (policy.c) and sends the three joint goals in one packet: the base gait at the leg's gait phase plus the policy's
- * corrections; then it advances the leg's gait clock by the policy's frequency correction. Without a policy the
- * corrections are zero and the leg follows the base gait (stepping in place for a zero command).
+ * (policy.c) every POLICY_PERIODS loops (25 Hz), and runs the leg's base controller (base_ctrl.c, Issue #85) with
+ * the policy's adjustments, ramped linearly from the previous policy step's over the policy period as in training
+ * (POLICY_INTERPOLATE, Issue #95; held when it is 0); it sends the controller's three joint goals in one packet and advances
+ * the leg's gait clock by the controller's frequency correction. Without a policy the adjustments are zero and the
+ * base controller walks alone (stepping in place for a zero command). The controller's message values (velocity
+ * estimate, speed integral) are kept for the neighbours; this stage has no links between legs yet, so the
+ * controller hears no neighbour (its message slots read "nothing received"). After reading the
+ * servos it sets the knee servo's torque limit from the measured knee angle (leg_knee_torque_limit, Issue #81), so
+ * that the push rod's force stays under its allowable load near the straight end of the knee range.
  *
  * It prints, every REPORT_LOOPS loops, the time of each stage (servo bus, IMU, policy, goals) and of the whole loop,
  * and the jitter of the loop's start against its schedule, as "timing" lines for the design record.
@@ -30,6 +36,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "base_ctrl.h"
 #include "leg.h"
 #include "policy.h"
 #include "sts.h"
@@ -106,6 +113,23 @@ static int servo_read_state(uint8_t id, sts_state_t *s)
     int got = uart_read_bytes(SERVO_UART, rep, 12, pdMS_TO_TICKS(SERVO_REPLY_TIMEOUT_MS));
     if (got <= 0) return -10;
     return sts_parse_state(rep, (size_t)got, id, s);
+}
+
+/* The knee servo's torque limit register (one broadcast packet, no reply), written only when the limit changes
+ * (leg_knee_limit_should_write). Returns 1 if it wrote. */
+static int s_knee_limit = -1;
+
+static int servo_knee_limit(double knee)
+{
+    int v = leg_knee_limit_register(knee);
+    if (!leg_knee_limit_should_write(s_knee_limit, v)) return 0;
+    uint8_t pkt[16];
+    uint16_t value = (uint16_t)v;
+    size_t n = sts_sync_write_u16(pkt, sizeof pkt, STS_ADDR_TORQUE_LIMIT, &SERVO_IDS[2], &value, 1);
+    uart_write_bytes(SERVO_UART, pkt, n);
+    uart_wait_tx_done(SERVO_UART, pdMS_TO_TICKS(2));
+    s_knee_limit = v;
+    return 1;
 }
 
 static void servo_write_goals(const uint16_t goals[ACT_JOINTS])
@@ -204,25 +228,34 @@ void app_main(void)
 #if CONFIG_ERG_EMBED_POLICY
     have_policy = policy_init(wasm_start, (uint32_t)(wasm_end - wasm_start), model_start,
                               (uint32_t)(model_end - model_start));
-    if (have_policy && (policy_n_in() != OBS_SIZE || policy_n_out() != ACT_SIZE_ALL)) {
+    if (have_policy && (policy_n_in() != OBS_SIZE || policy_n_out() != N_ADJUST)) {
         ESP_LOGE(TAG, "policy has %u inputs and %u outputs; this firmware needs %d and %d", (unsigned)policy_n_in(),
-                 (unsigned)policy_n_out(), OBS_SIZE, ACT_SIZE_ALL);
+                 (unsigned)policy_n_out(), OBS_SIZE, N_ADJUST);
         have_policy = false;
     }
     if (have_policy) policy_check(check_start, (size_t)(check_end - check_start));
 #else
-    ESP_LOGW(TAG, "built without a policy: holding the standing posture");
+    ESP_LOGW(TAG, "built without a policy: the base controller alone");
 #endif
 
     const double command[3] = {0.0, 0.0, 0.0};
     const double phase_start[OBS_N_LEGS] = GAIT_PHASE_START;
     double phase = phase_start[CONFIG_ERG_LEG_INDEX];
-    double obs[OBS_SIZE], action[64] = {0}, targets[ACT_JOINTS];
+    double obs[OBS_SIZE], action[64] = {0};
+    bc_leg_t ctrl;
+    bc_init(&ctrl, CONFIG_ERG_LEG_INDEX);
+    bc_adjust_t adj = {0};
+    bc_policy_t pol;
+    bc_policy_init(&pol);
+    double period_action[N_ADJUST];
+    bc_output_t out;
+    double learned[ACT_LEARNED] = {0}; /* the message values for the neighbours (erg.env clips them to [-1, 1]) */
+    uint32_t period = 0;
     sts_state_t servo[ACT_JOINTS] = {0};
     int16_t acc_raw[3] = {0}, gyro_raw[3] = {0};
     double acc[3], gyro[3];
     stat_t st_bus = {0}, st_imu = {0}, st_pol = {0}, st_goal = {0}, st_loop = {0}, st_jit = {0};
-    int bus_errors = 0, imu_errors = 0, loops = 0;
+    int bus_errors = 0, imu_errors = 0, loops = 0, knee_writes = 0;
 
     int64_t next = esp_timer_get_time() + CONTROL_PERIOD_US;
     for (;;) {
@@ -234,22 +267,39 @@ void app_main(void)
         stat_add(&st_jit, t0 - next);
         next += CONTROL_PERIOD_US;
 
+        bool knee_ok = true;
         for (int j = 0; j < ACT_JOINTS; j++) {
-            if (servo_read_state(SERVO_IDS[j], &servo[j]) != 0) bus_errors++;
+            if (servo_read_state(SERVO_IDS[j], &servo[j]) != 0) {
+                bus_errors++;
+                if (j == 2) knee_ok = false;
+            }
         }
+        /* the knee's torque limit from the measured knee angle (erg.knee_limit), before the new goals */
+        if (knee_ok) knee_writes += servo_knee_limit(leg_joint_angle(&s_cal[2], servo[2].position));
         int64_t t1 = esp_timer_get_time();
         if (!imu_ok || !imu_read(acc_raw, gyro_raw)) imu_errors++;
         leg_imu(&s_mount, acc_raw, gyro_raw, acc, gyro);
         bool contact = gpio_get_level(CONFIG_ERG_SWITCH_GPIO) == 0; /* switch to ground, pulled up */
         leg_observation(obs, s_cal, servo, acc, gyro, contact, phase, command, CONFIG_ERG_LEG_INDEX);
         int64_t t2 = esp_timer_get_time();
-        if (!have_policy || policy_eval(obs, action) != 0) memset(action, 0, sizeof action);
-        leg_targets(action, phase, command[0], targets);
+        if (period % POLICY_PERIODS == 0) { /* a new policy step: the policy's output, ramped or held over the step */
+            if (!have_policy || policy_eval(obs, action) != 0) memset(action, 0, sizeof action);
+            bc_policy_new(&pol, action);
+        }
+        bc_policy_period(&pol, (int)(period % POLICY_PERIODS), POLICY_INTERPOLATE, period_action);
+        bc_adjust_from_action(period_action, &adj);
+        period++;
+        bc_step(&ctrl, obs, &adj, &out);
+        for (int i = 0; i < ACT_LEARNED; i++) {
+            double v = out.message[i];
+            learned[i] = v < -1.0 ? -1.0 : (v > 1.0 ? 1.0 : v);
+        }
         int64_t t3 = esp_timer_get_time();
         uint16_t goals[ACT_JOINTS];
-        for (int j = 0; j < ACT_JOINTS; j++) goals[j] = leg_goal(&s_cal[j], targets[j]);
+        for (int j = 0; j < ACT_JOINTS; j++) goals[j] = leg_goal(&s_cal[j], out.targets[j]);
         servo_write_goals(goals);
-        phase = leg_clock(phase, action[ACT_FREQ]);
+        phase = leg_clock(phase, out.freq);
+        (void)learned;
         int64_t t4 = esp_timer_get_time();
 
         stat_add(&st_bus, t1 - t0);
@@ -260,13 +310,13 @@ void app_main(void)
         if (++loops == REPORT_LOOPS) {
             printf("timing (us, mean/max over %d loops): servo read %" PRId64 "/%" PRId64 ", imu+obs %" PRId64
                    "/%" PRId64 ", policy %" PRId64 "/%" PRId64 ", goals %" PRId64 "/%" PRId64 ", loop %" PRId64
-                   "/%" PRId64 ", start jitter %" PRId64 "/%" PRId64 "; bus errors %d, imu errors %d\n",
+                   "/%" PRId64 ", start jitter %" PRId64 "/%" PRId64 "; bus errors %d, imu errors %d, knee limit writes %d\n",
                    loops, st_bus.sum / loops, st_bus.max, st_imu.sum / loops, st_imu.max, st_pol.sum / loops,
                    st_pol.max, st_goal.sum / loops, st_goal.max, st_loop.sum / loops, st_loop.max,
-                   st_jit.sum / loops, st_jit.max, bus_errors, imu_errors);
+                   st_jit.sum / loops, st_jit.max, bus_errors, imu_errors, knee_writes);
             memset(&st_bus, 0, sizeof st_bus);
             st_imu = st_pol = st_goal = st_loop = st_jit = st_bus;
-            bus_errors = imu_errors = loops = 0;
+            bus_errors = imu_errors = loops = knee_writes = 0;
         }
     }
 }

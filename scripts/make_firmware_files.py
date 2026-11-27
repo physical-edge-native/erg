@@ -3,8 +3,10 @@
 Usage: uv run python scripts/make_firmware_files.py [--agent runs/.../agent.pt] [--rows 32]
 
 - firmware/leg-esp32/main/embed/mlp_actor.wasm: Dyne's mlp-actor (erg.dyne.build_mlp_actor);
-- firmware/leg-esp32/main/embed/policy.dynm: the per-leg actor of a trained agent (scripts/train.py --form split),
-  or, without --agent, an untrained actor (seed 0) of the same shape, which is enough to measure time and check bits;
+- firmware/leg-esp32/main/embed/policy.dynm: the per-leg actor of a trained agent (scripts/train.py --form split)
+  that adjusts the base controller (N_ADJUST outputs, Issues #82 and #85), or, without --agent, an untrained actor
+  (seed 0) of the same shape whose last layer is drawn small instead of zero (a new agent starts at the zero action),
+  which is enough to measure time and check bits;
 - firmware/leg-esp32/main/embed/check.bin: observations from the training environment and the actor's outputs for
   them, computed by Dyne's mlp-actor on the PC (wasmtime). The firmware runs the same observations at start and
   prints whether its outputs are bit for bit the same.
@@ -35,9 +37,13 @@ def main() -> None:
     ap.add_argument("--rows", type=int, default=32)
     a = ap.parse_args()
     torch.manual_seed(0)
-    agent = ppo.Agent("split")
+    agent = ppo.Agent("split", action="base")  # the mapping the firmware runs (#85)
     if a.agent:
         agent.load_state_dict(torch.load(a.agent))
+    else:
+        with torch.no_grad():  # non-zero outputs, so that the check compares something
+            torch.nn.init.normal_(agent.actor[-1].weight, std=0.1)
+            torch.nn.init.normal_(agent.actor[-1].bias, std=0.1)
     OUT.mkdir(parents=True, exist_ok=True)
     wasm = dyne.build_mlp_actor()
     (OUT / "mlp_actor.wasm").write_bytes(wasm.read_bytes())

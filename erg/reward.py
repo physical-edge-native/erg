@@ -81,3 +81,49 @@ def air_time_reward(touchdown, air_time, command) -> float:
     if not moving_commanded(command):
         return 0.0
     return float(W_AIR * np.sum((np.asarray(air_time) - AIR_TARGET) * np.asarray(touchdown, dtype=float)))
+
+
+# --- Reward of the learning setup on the base controller (Issue #82) -------------------------------------------
+# docs/design/2026-11-27-learning-setup.md, written before training. Per policy step (two control periods):
+#
+#     reward = mean over its control periods of the sum of walk_terms     tracking, height, posture, effort
+#            + the sum of smoothness_terms                                 first and second differences of the actions
+#     then clipped below at zero (clip_total); a fall ends the episode.
+#
+# The actions are the policy's outputs clipped to [-1, 1] (erg.base_controller.adjust_from_action).
+
+WALK_W_SPEED = 1.0
+WALK_SIGMA_SPEED = 0.05  # m/s
+WALK_W_TURN = 0.5
+WALK_SIGMA_TURN = 0.2  # rad/s
+WALK_W_HEIGHT = 100.0  # per m^2
+WALK_HEIGHT = 0.15  # m, torso centre standing (body L1; erg.base_controller.STANDING_HEIGHT)
+WALK_W_POSTURE = 1.0  # per rad^2 (about roll^2 + pitch^2)
+WALK_W_TORQUE = 0.5
+WALK_W_RATE = 0.5  # 0.05 in the first training of #82 and step 2 of #86; ten times since step 3 of #86
+WALK_W_RATE2 = 0.2  # 0.02 before step 3 of #86
+
+
+def tilt_squared(data) -> float:
+    """Squared horizontal part of the gravity direction in the torso frame: about roll^2 + pitch^2 (rad^2)."""
+    r = data.xmat[1].reshape(3, 3)
+    return float(r[2, 0] ** 2 + r[2, 1] ** 2)
+
+
+def walk_terms(data, command) -> dict:
+    """The per-control-period terms of the reward of Issue #82, signed and weighted."""
+    v, turn = heading_velocity(data)
+    return {
+        "speed": WALK_W_SPEED * float(np.exp(-np.sum((v - command[:2]) ** 2) / WALK_SIGMA_SPEED**2)),
+        "turn": WALK_W_TURN * float(np.exp(-((turn - command[2]) ** 2) / WALK_SIGMA_TURN**2)),
+        "height": -WALK_W_HEIGHT * float((data.xpos[1, 2] - WALK_HEIGHT) ** 2),
+        "posture": -WALK_W_POSTURE * tilt_squared(data),
+        "torque": -WALK_W_TORQUE * float(np.mean((data.actuator_force / robot.SERVO_STALL_TORQUE) ** 2)),
+    }
+
+
+def smoothness_terms(a, a1, a2) -> dict:
+    """Penalties on the first and second differences of the policy's actions (a now, a1 and a2 the two before)."""
+    a, a1, a2 = (np.asarray(x, dtype=np.float64) for x in (a, a1, a2))
+    return {"rate": -WALK_W_RATE * float(np.mean((a - a1) ** 2)),
+            "rate2": -WALK_W_RATE2 * float(np.mean((a - 2.0 * a1 + a2) ** 2))}

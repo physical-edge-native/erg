@@ -6,11 +6,11 @@ Pass criteria:
   corrections are clipped to [-1, 1] (0.5 to 1.5 times the base frequency);
 - the central mode has the same clocks, advancing the same way;
 - with zero corrections, the joint targets of the PPO controllers are the base gait (the trot with the
-  commanded forward speed's stride) at each leg's phase, bit for bit, and with zero stride the base gait's foot stays above its standing point;
+  commanded forward speed's stride) at each leg's phase, bit for bit, and with zero stride the base gait's foot stays above its standing point (FOOT_X ahead of the hip shaft);
 - a leg's phase reaches only the legs it is linked to: with "neighbours", never the diagonal leg;
 - with zero corrections, the base gait alone keeps the robot up (no fall) for 10 s stepping in place, and walks
-  forward at more than 0.1 m/s for a command of 0.15 m/s (0.12 m/s measured; the base gait alone is not expected to
-  reach the command, which is left to the corrections).
+  forward at more than 0.3 of a command of 0.15 m/s (0.12 m/s with the first body; about 0.06 m/s with body L1, #59;
+  the base gait alone is not expected to reach the command, which is left to the corrections).
 """
 
 import numpy as np
@@ -47,19 +47,19 @@ def test_clocks_advance_independently(central):
 
 
 def zero_action(form):
-    return np.zeros(ppo.Agent(form).act_dim * (N_LEGS if form == "split" else 1))
+    return np.zeros(ppo.Agent(form, "gait").act_dim * (N_LEGS if form == "split" else 1))
 
 
 def test_zero_corrections_follow_the_base_gait():
     for form in ("split", "central"):
-        w = ppo.Worker(ppo.Config(form=form), 0)
+        w = ppo.Worker(ppo.Config(form=form, action="gait"), 0)
         for _ in range(20):
             expected = ppo.base_targets(w.env.phase, w.env.command[0])
             w.step(zero_action(form))
             assert np.array_equal(w.env.data.ctrl, np.clip(expected.ravel(), w.env.model.actuator_ctrlrange[:, 0],
                                                            w.env.model.actuator_ctrlrange[:, 1]))
     x, z = gait.foot_path(0.75, 0.0)
-    assert x == 0.0 and z > -gait.STAND_DEPTH
+    assert x == gait.FOOT_X and z > -gait.STAND_DEPTH
 
 
 def test_phase_reaches_only_linked_legs():
@@ -79,7 +79,7 @@ def test_phase_reaches_only_linked_legs():
 
 
 def test_base_gait_alone_does_not_fall():
-    w = ppo.Worker(ppo.Config(form="split"), 0)
+    w = ppo.Worker(ppo.Config(form="split", action="gait"), 0)
     w.env.reset(0, np.zeros(3))
     for _ in range(ppo.EPISODE_STEPS):
         _, fell = w.step(zero_action("split"))
@@ -88,10 +88,10 @@ def test_base_gait_alone_does_not_fall():
 
 
 def test_base_gait_walks_forward():
-    w = ppo.Worker(ppo.Config(form="central"), 0)
+    w = ppo.Worker(ppo.Config(form="central", action="gait"), 0)
     w.env.reset(0, np.array([0.15, 0.0, 0.0]))
     x0 = w.env.data.qpos[0]
     for _ in range(ppo.EPISODE_STEPS):
         _, fell = w.step(zero_action("central"))
         assert not fell
-    assert (w.env.data.qpos[0] - x0) / (ppo.EPISODE_STEPS * robot.CONTROL_PERIOD) > 0.1
+    assert (w.env.data.qpos[0] - x0) / (ppo.EPISODE_STEPS * robot.CONTROL_PERIOD) > 0.3 * 0.15

@@ -20,22 +20,70 @@
 #define OBS_LEG_ID 21 /* 4 values */
 #define OBS_SLOTS 25 /* 42 values */
 /* Standing posture of one leg (rad): abduction, hip flexion, knee. */
-#define STAND_ANGLES {0.0, 0.6, -1.2}
-/* Policy outputs per leg: joint corrections, learned values, then the clock frequency correction. */
+#define STAND_ANGLES {0.0, 0.8504476094685183, -1.5371584045999214}
+/* Policy outputs per leg of erg.ppo's action mapping "gait" (#51), which this firmware runs: joint
+   corrections, learned values, then the clock frequency correction. The mapping "base" (#82, adjustments
+   of the base controller) is not ported yet. */
 #define ACT_FREQ 7
 #define ACT_SIZE_ALL 8
 /* Joint target = base gait at the leg's phase + ACTION_SCALE * correction (erg.ppo). */
 #define ACTION_SCALE 0.25
 /* Gait clock (erg.env): phase += CLOCK_STEP * (1 + FREQ_RANGE * f), modulo 1. */
-#define CLOCK_STEP 0.05714285714285715
+#define CLOCK_STEP 0.044444444444444446
 #define FREQ_RANGE 0.5
 #define GAIT_PHASE_START {0.0, 0.5, 0.5, 0.0}
 /* Base gait (erg.gait), values computed in Python so that the firmware uses the same bits. */
-#define GAIT_PERIOD 0.35
-#define GAIT_STEP_HEIGHT 0.015
-#define GAIT_STAND_DEPTH 0.1485604106837421
-#define GAIT_THIGH 0.09
-#define GAIT_SHANK 0.09
-#define GAIT_THIGH_SQ 0.0081
-#define GAIT_SHANK_SQ 0.0081
-#define GAIT_TWO_THIGH_SHANK 0.0162
+#define GAIT_PERIOD 0.45
+#define GAIT_STEP_HEIGHT 0.012
+#define GAIT_STAND_DEPTH 0.14
+#define GAIT_FOOT_X -0.008
+#define GAIT_THIGH 0.095
+#define GAIT_SHANK 0.1
+#define GAIT_THIGH_SQ 0.009025
+#define GAIT_SHANK_SQ 0.010000000000000002
+#define GAIT_TWO_THIGH_SHANK 0.019000000000000003
+/* Knee torque limit (erg.knee_limit): min(STALL, ARM * |sin(knee + CRANK_PHASE)|). */
+#define KNEE_LIMIT_ARM 12.869709734849945
+#define KNEE_LIMIT_STALL 2.94
+#define KNEE_CRANK_PHASE 0.0
+#define KNEE_LIMIT_FULL 1000
+#define KNEE_LIMIT_STEP 10
+/* Base controller (erg.base_controller) and the policy's adjustments of it (Issue #85). */
+#define N_ADJUST 6
+#define ADJUST_SCALE {0.3, 0.02, 0.02, 0.006, 0.5, 0.5}
+#define POLICY_PERIODS 2 /* control periods per policy step */
+/* 1: ramp the adjustments from the previous policy step's over the policy step (erg.ppo.period_actions,
+ * the training default of the "base" mapping); 0: hold them (Issue #95). */
+#define POLICY_INTERPOLATE 1
+#define BC_PI 3.141592653589793
+#define BC_DT 0.02
+#define BC_G 9.81
+#define BC_PERIOD 0.45
+#define BC_STANCE 0.5
+#define BC_STEP_HEIGHT 0.012
+#define BC_RETRACT 0.003
+#define BC_RETRACT_START 0.8
+#define BC_SWING_RAMP 0.25
+#define BC_COUPLING 0.5
+#define BC_SPEED_INTEGRAL 1.0
+#define BC_INTEGRAL_LIMIT 0.15
+#define BC_VEL_TAU 0.15
+#define BC_ATT_TAU 1.0
+#define BC_ACC_TRUST 0.2
+#define BC_ATT_GAIN 0.5
+#define BC_YAW_GAIN 0.5
+#define BC_MAX_REACH 0.05
+#define BC_MAX_ATT 0.03
+#define BC_PLACE_GAIN 0.12031220006383307
+#define BC_THIGH 0.095
+#define BC_SHANK 0.1
+#define BC_LEG_OFFSET 0.06
+#define BC_HIP_X 0.085
+#define BC_HIP_Y 0.04
+#define BC_STAND_DEPTH 0.14
+#define BC_FOOT_X (-0.008)
+#define BC_NEIGHBOURS {{1, 2}, {0, 3}, {0, 3}, {1, 2}} /* each leg's two neighbours, in the order of the sums */
+#define BC_LEG_SX {1.0, 1.0, (-1.0), (-1.0)}
+#define BC_LEG_SY {1.0, (-1.0), 1.0, (-1.0)}
+#define BC_M_LEARNED 7 /* in a message slot */
+#define BC_M_PHASE 11
