@@ -13,9 +13,10 @@ used only during training and never on the robot.
 
 Actors are ReLU networks with ACTOR_HIDDEN units per layer (bit-exact in Dyne's WebAssembly runtime; under the
 8,192-parameter limit of Dyne's full mlp-actor). Actions are Gaussian with a learned, state-independent standard
-deviation; the mean is used on the robot. Since #51 both forms correct a base gait (stepping in place, trot phases,
-erg.gait.leg_targets) driven by each leg's own clock (erg.env): a joint target is the base gait's target at the
-leg's phase + ACTION_SCALE * correction (it was robot.STAND + 0.5 rad * action before #51).
+deviation; the mean is used on the robot. Since #51 both forms correct a base gait (the trot of erg.gait with the stride
+of the commanded forward speed, erg.gait.leg_targets) driven by each leg's own clock (erg.env): a joint target is
+the base gait's target at the leg's phase + ACTION_SCALE * correction (it was robot.STAND + 0.5 rad * action before
+#51). Each leg computes its base gait from its own phase and the command, both in its own observation.
 
 Runs are deterministic: one thread for PyTorch, seeded generators, environments stepped in a fixed order.
 """
@@ -64,7 +65,7 @@ class Config:
     value_coef: float = 0.5
     entropy_coef: float = 0.01  # 0 before the third pilot (#49); as in legged_gym
     max_grad_norm: float = 1.0
-    init_log_std: float = -0.5  # -1.0 before the third pilot (#49): more exploration at the start
+    init_log_std: float = -2.3  # about 0.1; -0.5 in the third and fourth pilots, -1.0 before (#49, #51)
     seed: int = 0
     log: list = field(default_factory=list)
 
@@ -108,10 +109,11 @@ def central_obs(obs_split: np.ndarray) -> np.ndarray:
     return np.concatenate([obs_split[:, :LEG_SIZE].ravel(), obs_split[0, LEG_SIZE:LEG_SIZE + 3]])
 
 
-def base_targets(phase: np.ndarray) -> np.ndarray:
-    """Joint targets of the base gait (stepping in place) at each leg's phase, shape (4, 3). Each leg's only
-    depend on its own phase, so a leg's controller can compute them alone."""
-    return np.stack([gait.leg_targets(p) for p in phase])
+def base_targets(phase: np.ndarray, forward: float = 0.0) -> np.ndarray:
+    """Joint targets of the base gait at each leg's phase, shape (4, 3): the trot of erg.gait with the stride that
+    walks at the commanded forward speed (stepping in place at zero). Each leg's depend only on its own phase and the
+    command, so a leg's controller can compute them alone."""
+    return np.stack([gait.leg_targets(p, forward * gait.PERIOD / 2) for p in phase])
 
 
 class Worker:
@@ -132,7 +134,7 @@ class Worker:
         command = draw_command(np.random.Generator(np.random.PCG64([seed, 1]))) * self.command_scale
         self.obs = self.env.reset(seed, command)
         self.steps = 0
-        self.prev_targets = base_targets(self.env.phase).ravel()
+        self.prev_targets = base_targets(self.env.phase, self.env.command[0]).ravel()
         self.in_contact = self.contacts()
         self.air_time = np.zeros(N_LEGS)
 
@@ -149,7 +151,7 @@ class Worker:
     def step(self, action: np.ndarray) -> tuple[float, bool]:
         """Apply one action (raw policy output); returns the reward and whether the episode ended by a fall
         (time limits end episodes too, but are not falls)."""
-        base = base_targets(self.env.phase)
+        base = base_targets(self.env.phase, self.env.command[0])
         if self.cfg.form == "split":
             a = action.reshape(N_LEGS, ACT_SIZE + LEARNED + 1)
             env_action = np.concatenate([base + ACTION_SCALE * a[:, :ACT_SIZE], a[:, ACT_SIZE:ACT_SIZE + LEARNED]],

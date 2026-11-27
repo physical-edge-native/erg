@@ -5,10 +5,12 @@ Pass criteria:
   CONTROL_PERIOD / erg.gait.PERIOD per control step; a frequency correction changes only that leg's clock, and
   corrections are clipped to [-1, 1] (0.5 to 1.5 times the base frequency);
 - the central mode has the same clocks, advancing the same way;
-- with zero corrections, the joint targets of the PPO controllers are the base gait (stepping in place) at each
-  leg's phase, bit for bit, and with zero stride the base gait's foot stays above its standing point;
+- with zero corrections, the joint targets of the PPO controllers are the base gait (the trot with the
+  commanded forward speed's stride) at each leg's phase, bit for bit, and with zero stride the base gait's foot stays above its standing point;
 - a leg's phase reaches only the legs it is linked to: with "neighbours", never the diagonal leg;
-- with zero corrections, the base gait alone keeps the robot standing (no fall) for 10 s.
+- with zero corrections, the base gait alone keeps the robot up (no fall) for 10 s stepping in place, and walks
+  forward at more than 0.1 m/s for a command of 0.15 m/s (0.12 m/s measured; the base gait alone is not expected to
+  reach the command, which is left to the corrections).
 """
 
 import numpy as np
@@ -52,7 +54,7 @@ def test_zero_corrections_follow_the_base_gait():
     for form in ("split", "central"):
         w = ppo.Worker(ppo.Config(form=form), 0)
         for _ in range(20):
-            expected = ppo.base_targets(w.env.phase)
+            expected = ppo.base_targets(w.env.phase, w.env.command[0])
             w.step(zero_action(form))
             assert np.array_equal(w.env.data.ctrl, np.clip(expected.ravel(), w.env.model.actuator_ctrlrange[:, 0],
                                                            w.env.model.actuator_ctrlrange[:, 1]))
@@ -83,3 +85,13 @@ def test_base_gait_alone_does_not_fall():
         _, fell = w.step(zero_action("split"))
         assert not fell
     assert not reward.fallen(w.env.data)
+
+
+def test_base_gait_walks_forward():
+    w = ppo.Worker(ppo.Config(form="central"), 0)
+    w.env.reset(0, np.array([0.15, 0.0, 0.0]))
+    x0 = w.env.data.qpos[0]
+    for _ in range(ppo.EPISODE_STEPS):
+        _, fell = w.step(zero_action("central"))
+        assert not fell
+    assert (w.env.data.qpos[0] - x0) / (ppo.EPISODE_STEPS * robot.CONTROL_PERIOD) > 0.1
