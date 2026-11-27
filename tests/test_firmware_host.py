@@ -314,3 +314,16 @@ def test_policy_actions_ramped_over_the_policy_step(host, interpolate, command, 
             assert got.split() == bits([*p, *py.targets, py.freq, *py.message]), (robot.LEGS[i], k)
     if interpolate:  # the ramp is used: the first period of a step is neither the old nor the new action
         assert any(not np.array_equal(p, rw.clip(-1, 1)) for j, rw, _, p, _ in rec[0] if j == 0)
+
+
+def test_base_controller_rolling_foot_term_is_checked(host, monkeypatch):
+    """The recorded walks exercise the rolling foot's term of the velocity estimate (Issue #98): the firmware, built
+    with ROLL_RADIUS from erg.base_controller, differs from the Python controller with the term turned off."""
+    from erg import base_controller as bc
+
+    assert bc.ROLL_RADIUS > 0.0
+    monkeypatch.setattr(bc, "ROLL_RADIUS", 0.0)
+    rec = _base_controller_records((0.1, 0.0, 0.0), 0, 40, False)[0]
+    lines = ["bcreset 0"] + ["bcstep 0 " + " ".join(bits([*a, *o])) for o, a, _, _ in rec]
+    out = host(lines)[1:]
+    assert any(got.split() != bits([*py.targets, py.freq, *py.message]) for (_, _, _, py), got in zip(rec, out))

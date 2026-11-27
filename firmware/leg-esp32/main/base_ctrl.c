@@ -163,8 +163,10 @@ void bc_step(bc_leg_t *c, const double obs[OBS_SIZE], const bc_adjust_t *adj_in,
     double fx = foot[0] + hx, fy = foot[1] + hy, fz = foot[2];
     double wx = obs[OBS_GYRO], wy = obs[OBS_GYRO + 1], wz = obs[OBS_GYRO + 2];
     bool contact = obs[OBS_CONTACT] > 0.5;
+    double shank = obs[OBS_JOINT_POS + 1] + obs[OBS_JOINT_POS + 2];
     if (contact && c->has_prev_foot) {
-        double vx = -(fx - c->prev_foot[0]) / BC_DT - (wy * fz - wz * fy);
+        double roll = BC_ROLL_RADIUS * ((shank - c->prev_shank) / BC_DT + wy); /* the rolling foot's centre */
+        double vx = -(fx - c->prev_foot[0]) / BC_DT - (wy * fz - wz * fy) + roll;
         double vy = -(fy - c->prev_foot[1]) / BC_DT - (wz * fx - wx * fz);
         double a = BC_DT / (BC_VEL_TAU + BC_DT);
         vel[0] = vel[0] + a * (vx - vel[0]);
@@ -173,6 +175,7 @@ void bc_step(bc_leg_t *c, const double obs[OBS_SIZE], const bc_adjust_t *adj_in,
     c->has_prev_foot = contact;
     c->prev_foot[0] = fx;
     c->prev_foot[1] = fy;
+    c->prev_shank = shank;
     c->vel[0] = vel[0];
     c->vel[1] = vel[1];
     double ex = vx_c - vel[0], ey = vy_c - vel[1];

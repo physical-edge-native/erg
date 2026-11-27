@@ -100,6 +100,7 @@ def base_controller_lines() -> list[str]:
         "YAW_GAIN": bc.YAW_GAIN, "MAX_REACH": bc.MAX_REACH, "MAX_ATT": bc.MAX_ATT, "PLACE_GAIN": bc.PLACE_GAIN,
         "THIGH": design.THIGH, "SHANK": design.SHANK, "LEG_OFFSET": design.LEG_OFFSET, "HIP_X": design.HIP_X,
         "HIP_Y": design.HIP_Y, "STAND_DEPTH": design.STAND_DEPTH, "FOOT_X": gait.FOOT_X,
+        "ROLL_RADIUS": bc.ROLL_RADIUS,
     }
     lines += [f"#define BC_{k} {_c(v)}" for k, v in values.items()]
     idx = {leg: i for i, leg in enumerate(robot.LEGS)}

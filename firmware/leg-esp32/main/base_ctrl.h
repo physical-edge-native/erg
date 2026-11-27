@@ -24,6 +24,7 @@ typedef struct {
     double vel[2], integral[2], roll, pitch;
     bool has_prev_foot;
     double prev_foot[2];
+    double prev_shank; /* hip flexion + knee angle at the previous period (the rolling foot, Issue #98) */
     bool has_prev_s;
     double prev_s;
     double td[2], lo[2], last[2];

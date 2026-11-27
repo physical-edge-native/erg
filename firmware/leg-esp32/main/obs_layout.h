@@ -82,6 +82,7 @@
 #define BC_HIP_Y 0.04
 #define BC_STAND_DEPTH 0.14
 #define BC_FOOT_X (-0.008)
+#define BC_ROLL_RADIUS 0.012
 #define BC_NEIGHBOURS {{1, 2}, {0, 3}, {0, 3}, {1, 2}} /* each leg's two neighbours, in the order of the sums */
 #define BC_LEG_SX {1.0, 1.0, (-1.0), (-1.0)}
 #define BC_LEG_SY {1.0, (-1.0), 1.0, (-1.0)}
