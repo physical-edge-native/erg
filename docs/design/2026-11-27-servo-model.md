@@ -1,7 +1,8 @@
 # Servo model with delay and torque-speed limit (Issue #70)
 
-Status: implemented in simulation (`erg/servo.py`); every parameter is unverified until the bench identification
-below is done on the real servo. Written with the help of an AI assistant.
+Status: implemented in simulation (`erg/servo.py`), with the bench script and the fit (`scripts/servo_bench.py`,
+#88); every parameter is unverified until the bench identification below is done on the real servo. Written with
+the help of an AI assistant.
 
 ## Why
 
@@ -130,3 +131,71 @@ BAM itself can be used if its models fit): delay, kp, kd, stall torque, back ele
 speed), Coulomb friction, armature. The load reading is calibrated against the known pendulum torque, since the
 environment's observation uses it. Result: a new `ServoParams` with the measured values and sources, the randomisation
 ranges set from the spread over servos and runs, and the body targets of this record recomputed.
+
+## Bench script and model fit (Issue #88)
+
+`scripts/servo_bench.py` carries out the plan above from a PC; `erg/bench.py` holds the code and `erg/sts.py` the
+serial-bus packets.
+
+- **Packets.** The same packets as the leg firmware's `sts.c`; `tests/test_sts.py` checks them byte for byte against
+  the firmware's C code compiled for the PC. Goals are sent as the robot sends them (a sync write, no reply); the
+  bench also reads the block from present position to present current (15 bytes) and writes torque enable.
+- **Run.** `run` pings the servo, reads its P, D and I gains, enables the torque at the present position, brings the
+  arm to the hanging position in the first second, then runs the schedule: `full` is 50 small steps for the delay,
+  steps of 0.1–1.0 rad both ways (twice), chirps 0.5–10 Hz at 0.05 and 0.2 rad, and slow ramps both ways (about 2.5
+  minutes); `short` is a few seconds of the same kinds. Each loop of 5 ms writes the goal and reads the block; the
+  log (CSV) holds, per loop, the goal's write time and angle, the reading's time (when the request was sent), position,
+  speed, load, voltage, temperature, current, error bits, the raw register values and the experiment's name; the
+  rig (arm mass and length, load mass) is in the header. Targets are clipped to ±1.2 rad; the run stops and switches
+  the torque off above 65 °C, below 10 V, above 3 A, or on any bus error.
+- **Fit.** `fit` simulates the rig (`Rig`: an arm of uniform mass with a load at its end, hanging down at zero) in
+  MuJoCo with erg.servo's model, applies the logged goals at their logged times, and minimises the squared
+  differences of position (weight 1 / 2e-3 rad) and speed (weight 1 / 0.2 rad/s) at the logged reading times. The
+  delay is searched in whole simulation steps (2 ms, the resolution of the robot's model); kp, kd, friction,
+  armature, stall torque and no-load speed by Levenberg-Marquardt with finite differences, starting from the
+  nominal values. It also reports the ratio of the logged load to the simulated drive torque, the load reading's
+  calibration. Several logs (different loads) can be fitted together.
+- **Dry run.** `dry-run` does the same against `SimServoPort`, a simulated servo on a simulated bus (each byte takes
+  its time at 1 Mbaud; the servo model runs on the rig up to the bus's clock; the position is read in whole steps),
+  with known parameters that differ from the starting values, and checks the fit (`tests/test_servo_bench.py`, about
+  6 s). Tolerances (`erg.bench.FIT_TOLERANCE`): delay exact; kp, armature, stall torque and no-load speed within 8 %;
+  friction within 10 %; kd within 0.05 N·m·s/rad. Grounds: five trials with random parameters (±25 % of the nominal
+  values, delays 4–20 ms) recovered the delay exactly, kp, armature, stall torque and no-load speed within 4 %
+  and friction within 3 %, with the default rig (0.3 kg at 0.15 m). With a light load (0.1 kg at 0.10 m), whose
+  inertia is a twentieth of the rotor's, kp and armature drifted together by up to 12 %: the load must be heavy
+  enough. kd came out between 0 and its true value (≤ 0.042): in motion that does not saturate the drive it only
+  adds to the back electromotive force's damping, so a short log hardly tells them apart; the full schedule's fast
+  chirps are meant to.
+
+The simulated servo uses the fit's own model, so the dry run checks the code path and the fit's ability to recover
+parameters, not that the model fits a real servo; that is what the bench run (#87) shows, through the remaining
+error (rms position and speed) of the fit.
+
+### Operator's guide (for the bench run, Issue #87)
+
+Requires: one servo, a 12 V bench supply with an adjustable current limit, the servo bus adapter (a USB serial bus
+adapter for Feetech servos), a stand that holds the servo with its shaft horizontal, a printed arm with a load at a
+measured length, a kitchen scale (to 1 g) and a ruler. Install pyserial: `uv sync --extra bench`.
+
+1. **Measure the rig.** Weigh the arm without the load and the load; measure the shaft-to-load-centre length. These
+   go into `--arm-mass`, `--load-mass` and `--arm-length` (kg, m).
+2. **Wire.** Supply off. Servo cable to the adapter's servo port; the adapter's power input to the bench supply; the
+   adapter's USB to the PC. Set the supply to 12.0 V and its **current limit to 3 A** (the script also stops above
+   3 A; the servo's stall current is not known yet, so raise the limit only if the seller's listing gives a higher
+   one) before switching it on. Check that the servo's ID is 1 (or pass `--id`) and
+   that no other servo is on the bus.
+3. **Check the registers first.** `uv run python scripts/servo_bench.py run --port PORT --schedule short --load-mass 0
+   --arm-mass 0 --arm-length 0.15 --out check.csv` with no arm fitted: it prints the gains, and the log must show the
+   position following the goals, the voltage near 12 V and a temperature near room temperature. If the values make no
+   sense, the register addresses in `erg/sts.py` differ from this servo's; stop and report it in #87.
+4. **Set the zero.** Fit the arm so that it hangs straight down at about the servo's middle position (2048 steps); if
+   it is off by more than a few degrees, pass the hanging position's steps with `--zero`.
+5. **Run.** Keep hands clear of the arm's swing (±1.2 rad, about ±70°). For each load (none, the arm only, and the
+   arm with the load): `uv run python scripts/servo_bench.py run --port PORT --schedule full ... --out
+   load-NAME.csv`. Let the servo cool to below 40 °C between runs. The supply's current display should stay below
+   the limit; if the supply limits the current, the run is not valid (note it).
+6. **Fit.** `uv run python scripts/servo_bench.py fit load-*.csv --out fit.json`.
+
+Attach to #87: the CSV logs, `fit.json`, the printed gains, the rig's measured masses and length, the supply's
+voltage and current limit, the adapter's model, the room temperature, and a photo of the rig. Do not attach serial
+numbers, device addresses or anything that identifies the PC or its network.
