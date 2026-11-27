@@ -12,11 +12,18 @@
  *   targets A0..A7 PHASE FORWARD                                -> 3 doubles
  *   clock PHASE F | base PHASE STRIDE | phasevals PHASE          -> 1, 3 or 2 doubles
  *   sincos X | atan2 Y X | acos C                               -> 2, 1 or 1 doubles
+ *   kneelimit Q                                                 -> limit (double), then the register value
+ *   kneewrite LAST VALUE                                        -> 0 or 1
+ *   syncu16 ADDR N ID VALUE ...                                 -> packet bytes in hex
+ *   bcreset LEG                                                 -> (nothing) a new base controller for the leg
+ *   bcadjust A0..A5                                             -> 6 doubles (the Adjust's fields)
+ *   bcstep HAS_ADJ A0..A5 OBS...                                -> targets (3), frequency, message (4)
  */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "../main/base_ctrl.h"
 #include "../main/leg.h"
 #include "../main/sts.h"
 #include "../main/xmath.h"
@@ -60,6 +67,8 @@ int main(void)
 {
     char cmd[32];
     uint8_t buf[256];
+    bc_leg_t bc;
+    bc_init(&bc, 0);
     while (scanf("%31s", cmd) == 1) {
         if (!strcmp(cmd, "ping")) {
             pbytes(buf, sts_ping(buf, sizeof buf, (uint8_t)ri()));
@@ -161,6 +170,47 @@ int main(void)
         } else if (!strcmp(cmd, "atan2")) {
             double y = rd(), x = rd();
             pd(xm_atan2(y, x));
+        } else if (!strcmp(cmd, "kneelimit")) {
+            double q = rd();
+            pd(leg_knee_torque_limit(q));
+            printf(" %d", leg_knee_limit_register(q));
+        } else if (!strcmp(cmd, "kneewrite")) {
+            long last = ri(), v = ri();
+            printf("%d", leg_knee_limit_should_write((int)last, (int)v) ? 1 : 0);
+        } else if (!strcmp(cmd, "syncu16")) {
+            long addr = ri(), n = ri();
+            uint8_t ids[16];
+            uint16_t vals[16];
+            for (long i = 0; i < n; i++) {
+                ids[i] = (uint8_t)ri();
+                vals[i] = (uint16_t)ri();
+            }
+            pbytes(buf, sts_sync_write_u16(buf, sizeof buf, (uint8_t)addr, ids, vals, (size_t)n));
+        } else if (!strcmp(cmd, "bcreset")) {
+            bc_init(&bc, (int)ri());
+        } else if (!strcmp(cmd, "bcadjust")) {
+            double a[N_ADJUST];
+            for (int i = 0; i < N_ADJUST; i++) a[i] = rd();
+            bc_adjust_t adj;
+            bc_adjust_from_action(a, &adj);
+            pd(adj.freq);
+            pd(adj.foot_dx);
+            pd(adj.foot_dy);
+            pd(adj.step_height);
+            pd(adj.place_gain);
+            pd(adj.att_gain);
+        } else if (!strcmp(cmd, "bcstep")) {
+            int has_adj = (int)ri();
+            double a[N_ADJUST], obs[OBS_SIZE];
+            for (int i = 0; i < N_ADJUST; i++) a[i] = rd();
+            for (int i = 0; i < OBS_SIZE; i++) obs[i] = rd();
+            bc_adjust_t adj;
+            bc_adjust_from_action(a, &adj);
+            bc_output_t o;
+            bc_step(&bc, obs, has_adj ? &adj : NULL, &o);
+            for (int j = 0; j < ACT_JOINTS; j++) pd(o.targets[j]);
+            pd(o.freq);
+            for (int i = 0; i < ACT_LEARNED; i++) pd(o.message[i]);
         } else if (!strcmp(cmd, "acos")) {
             pd(xm_acos(rd()));
         } else {

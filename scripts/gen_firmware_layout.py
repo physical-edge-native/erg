@@ -10,7 +10,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from erg import env, gait, ppo, robot  # noqa: E402
+from erg import base_controller as bc  # noqa: E402
+from erg import design, env, gait, knee_limit, ppo, robot  # noqa: E402
 
 HEADER = ROOT / "firmware" / "leg-esp32" / "main" / "obs_layout.h"
 
@@ -43,7 +44,9 @@ def text() -> str:
     lines.append("/* Standing posture of one leg (rad): abduction, hip flexion, knee. */")
     stand = ", ".join(repr(float(v)) for v in robot.STAND[: env.ACT_SIZE])
     lines.append(f"#define STAND_ANGLES {{{stand}}}")
-    lines.append("/* Policy outputs per leg: joint corrections, learned values, then the clock frequency correction. */")
+    lines.append("/* Policy outputs per leg of erg.ppo's action mapping \"gait\" (#51), which this firmware runs: joint")
+    lines.append("   corrections, learned values, then the clock frequency correction. The mapping \"base\" (#82, adjustments")
+    lines.append("   of the base controller) is not ported yet. */")
     lines.append(f"#define ACT_FREQ {env.ACT_SIZE + env.LEARNED}")
     lines.append(f"#define ACT_SIZE_ALL {env.ACT_SIZE + env.LEARNED + 1}")
     lines.append("/* Joint target = base gait at the leg's phase + ACTION_SCALE * correction (erg.ppo). */")
@@ -57,12 +60,54 @@ def text() -> str:
     lines.append(f"#define GAIT_PERIOD {gait.PERIOD!r}")
     lines.append(f"#define GAIT_STEP_HEIGHT {gait.STEP_HEIGHT!r}")
     lines.append(f"#define GAIT_STAND_DEPTH {float(gait.STAND_DEPTH)!r}")
+    lines.append(f"#define GAIT_FOOT_X {float(gait.FOOT_X)!r}")
     lines.append(f"#define GAIT_THIGH {gait.THIGH!r}")
     lines.append(f"#define GAIT_SHANK {gait.SHANK!r}")
     lines.append(f"#define GAIT_THIGH_SQ {gait.THIGH * gait.THIGH!r}")
     lines.append(f"#define GAIT_SHANK_SQ {gait.SHANK * gait.SHANK!r}")
     lines.append(f"#define GAIT_TWO_THIGH_SHANK {2 * gait.THIGH * gait.SHANK!r}")
+    lines.append("/* Knee torque limit (erg.knee_limit): min(STALL, ARM * |sin(knee + CRANK_PHASE)|). */")
+    lines.append(f"#define KNEE_LIMIT_ARM {knee_limit.ARM!r}")
+    lines.append(f"#define KNEE_LIMIT_STALL {knee_limit.STALL!r}")
+    lines.append(f"#define KNEE_CRANK_PHASE {knee_limit.CRANK_PHASE!r}")
+    lines.append(f"#define KNEE_LIMIT_FULL {knee_limit.REGISTER_FULL}")
+    lines.append(f"#define KNEE_LIMIT_STEP {knee_limit.WRITE_STEP}")
+    lines += base_controller_lines()
     return "\n".join(lines) + "\n"
+
+
+def _c(x: float) -> str:
+    """A double literal with the same bits, parenthesised if negative."""
+    r = repr(float(x))
+    return f"({r})" if r.startswith("-") else r
+
+
+def base_controller_lines() -> list[str]:
+    """The base controller's constants (erg.base_controller, Issue #85): a retune of the Python controller only
+    regenerates them."""
+    lines = ["/* Base controller (erg.base_controller) and the policy's adjustments of it (Issue #85). */",
+             f"#define N_ADJUST {bc.N_ADJUST}",
+             f"#define ADJUST_SCALE {{{', '.join(_c(v) for v in bc.ADJUST_SCALE)}}}",
+             f"#define POLICY_PERIODS {ppo.POLICY_PERIODS} /* control periods per policy step */"]
+    values = {
+        "PI": bc.PI, "DT": bc.DT, "G": bc.G, "PERIOD": bc.PERIOD, "STANCE": bc.STANCE, "STEP_HEIGHT": bc.STEP_HEIGHT,
+        "RETRACT": bc.RETRACT, "RETRACT_START": bc.RETRACT_START, "SWING_RAMP": bc.SWING_RAMP,
+        "COUPLING": bc.COUPLING, "SPEED_INTEGRAL": bc.SPEED_INTEGRAL, "INTEGRAL_LIMIT": bc.INTEGRAL_LIMIT,
+        "VEL_TAU": bc.VEL_TAU, "ATT_TAU": bc.ATT_TAU, "ACC_TRUST": bc.ACC_TRUST, "ATT_GAIN": bc.ATT_GAIN,
+        "YAW_GAIN": bc.YAW_GAIN, "MAX_REACH": bc.MAX_REACH, "MAX_ATT": bc.MAX_ATT, "PLACE_GAIN": bc.PLACE_GAIN,
+        "THIGH": design.THIGH, "SHANK": design.SHANK, "LEG_OFFSET": design.LEG_OFFSET, "HIP_X": design.HIP_X,
+        "HIP_Y": design.HIP_Y, "STAND_DEPTH": design.STAND_DEPTH, "FOOT_X": gait.FOOT_X,
+    }
+    lines += [f"#define BC_{k} {_c(v)}" for k, v in values.items()]
+    idx = {leg: i for i, leg in enumerate(robot.LEGS)}
+    nb = ", ".join("{" + ", ".join(str(idx[n]) for n in bc.NEIGHBOURS[leg]) + "}" for leg in robot.LEGS)
+    lines.append(f"#define BC_NEIGHBOURS {{{nb}}} /* each leg's two neighbours, in the order of the sums */")
+    signs = [design.leg_sign(leg) for leg in robot.LEGS]
+    lines.append(f"#define BC_LEG_SX {{{', '.join(_c(s[0]) for s in signs)}}}")
+    lines.append(f"#define BC_LEG_SY {{{', '.join(_c(s[1]) for s in signs)}}}")
+    lines.append(f"#define BC_M_LEARNED {bc._M_LEARNED.start} /* in a message slot */")
+    lines.append(f"#define BC_M_PHASE {bc._M_PHASE.start}")
+    return lines
 
 
 def main() -> None:
