@@ -20,14 +20,12 @@ test is skipped, saying so, if no C compiler is found.
 """
 
 import math
-import shutil
 import struct
 import subprocess
 import sys
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from erg import env, exactmath, gait, ppo, robot
 
@@ -41,23 +39,6 @@ GYRO_PER_STEP = 17.5e-3 * 3.141592653589793 / 180.0
 def test_layout_header_is_current():
     r = subprocess.run([sys.executable, str(ROOT / "scripts" / "gen_firmware_layout.py"), "--check"], cwd=ROOT)
     assert r.returncode == 0, "run scripts/gen_firmware_layout.py"
-
-
-@pytest.fixture(scope="module")
-def host(tmp_path_factory):
-    cc = shutil.which("cc") or shutil.which("gcc") or shutil.which("clang")
-    if cc is None:
-        pytest.skip("no C compiler on the PATH")
-    exe = tmp_path_factory.mktemp("fw") / ("host_check.exe" if sys.platform == "win32" else "host_check")
-    src = [FW / "host_test" / "host_check.c", FW / "main" / "sts.c", FW / "main" / "leg.c", FW / "main" / "xmath.c"]
-    subprocess.run([cc, "-std=c11", "-O2", "-ffp-contract=off", "-Wall", "-Werror", "-o", str(exe),
-                    *map(str, src), "-lm"], check=True)
-
-    def run(lines):
-        out = subprocess.run([str(exe)], input="\n".join(lines) + "\n", capture_output=True, text=True, check=True)
-        return out.stdout.splitlines()
-
-    return run
 
 
 def h(x: float) -> str:

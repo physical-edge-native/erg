@@ -55,12 +55,12 @@ void leg_base(double phase, double stride, double out[ACT_JOINTS])
     double s = xm_mod1(phase), x, z;
     if (s < 0.5) {
         double u = s / 0.5;
-        x = stride / 2 - stride * u;
+        x = stride / 2 - stride * u + GAIT_FOOT_X;
         z = -GAIT_STAND_DEPTH;
     } else {
         double u = (s - 0.5) / 0.5, sn, cs;
         xm_sincos(3.141592653589793 * u, &sn, &cs);
-        x = -stride / 2 + stride * u;
+        x = -stride / 2 + stride * u + GAIT_FOOT_X;
         z = -GAIT_STAND_DEPTH + GAIT_STEP_HEIGHT * sn;
     }
     double r2 = x * x + z * z;
