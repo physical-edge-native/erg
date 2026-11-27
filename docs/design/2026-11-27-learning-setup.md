@@ -166,5 +166,86 @@ Reasons for the values:
 
 `tests/test_learning_setup.py`: zero action equals the base controller bit for bit (both forms, with the servo
 model); action clipping and scales; each reward term on hand-made cases (height, posture, first and second
-differences); the CAPS terms are zero for a constant actor; deterministic training of both forms; a tiny training run
+differences); the CAPS terms are zero for a constant actor; deterministic training of both forms (`tests/test_ppo.py`); a tiny training run
 of both forms through `scripts/train.py` that checks only the pipeline (well under a minute).
+
+## Results of the first training (2026-11-27)
+
+Trained with the code as committed with this record (`uv run python scripts/train.py --form {split,central}
+--steps 1000000 --n-envs 8 --seed {0,1,2}`), the six runs at once on a four-thread cloud machine: 1,000,448
+environment steps each, 1,708–1,819 s of wall-clock per run (about 31 minutes for all six); per step about 1.6 ms of
+environment (base controller, servo model, MuJoCo) and 0.17 ms (per-leg) or 0.11 ms (central) of update. No fall in
+training. Evaluated with `uv run python scripts/evaluate_learning.py` (175 runs of 20 s, 76 s on four processes).
+Weights are not committed (about 260 kB per run with the critic); the runs are reproducible bit for bit from the
+commands above.
+
+Nothing in the conditions was changed after the run.
+
+| # | Condition | Base controller alone | Per-leg, seeds 0 / 1 / 2 | Central, seeds 0 / 1 / 2 |
+|---|---|---|---|---|
+| L1 | Forward speed ±20 % | pass | pass / pass / pass | pass / pass / pass |
+| L2 | Turning ±30 % | pass | pass / pass / **fail** | pass / pass / pass |
+| L3 | No falls | pass | pass / pass / pass | pass / pass / pass |
+| L4 | Smoothness ≤ 1.2 × base | (1.0) | **fail** / **fail** / **fail** | **fail** / **fail** / **fail** |
+| L5 | Torque p95 ≤ 0.5 at 0.1 m/s | **fail** | **fail** / **fail** / **fail** | **fail** / **fail** / **fail** |
+| L6 | Determinism | — | pass (tests) | pass (tests) |
+| L7 | Zero action = base controller | — | pass (tests) | pass (tests) |
+
+**Per form: both forms fail L4 and L5; the per-leg form also fails L2 (one policy, one seed).** Neither form passes
+the conditions in this first training.
+
+Measured values (ranges over the five evaluation seeds; torque is the worst joint's 95th percentile ÷ stall torque;
+smoothness is the policy's mean |second difference| of the joint targets ÷ the base controller's on the same seed):
+
+| Policy | Forward at 0.05 / 0.1 / 0.15 m/s | Yaw rate at (0.1, 0, ±0.3) | Torque at 0.1 m/s (seeds ≤ 0.5) | Torque at 0.15 m/s | Smoothness ratio at 0.1 m/s | Mean relative tracking error |
+|---|---|---|---|---|---|---|
+| Base controller | 0.050–0.056 / 0.108–0.112 / 0.163–0.176 | +0.27–0.31 / −0.24 to −0.29 | 0.56–0.70 (0 of 5) | 0.73–0.82 | 1.00 | 0.096 |
+| Per-leg 0 | 0.054–0.055 / 0.111–0.113 / 0.164–0.173 | +0.23–0.30 / −0.21 to −0.24 | 0.57–0.73 (0 of 5) | 0.61–0.75 | 1.57–1.71 | 0.133 |
+| Per-leg 1 | 0.052–0.054 / 0.106–0.108 / 0.163–0.168 | +0.23–0.31 / −0.24 to −0.29 | 0.47–0.61 (1 of 5) | 0.62–0.70 | 1.48–1.64 | 0.092 |
+| Per-leg 2 | 0.054–0.055 / 0.108–0.110 / 0.166–0.173 | +0.26–0.27 / −0.20 to −0.26 | 0.49–0.63 (1 of 5) | 0.61–0.67 | 1.39–1.54 | 0.126 |
+| Central 0 | 0.054–0.055 / 0.109–0.112 / 0.166–0.171 | +0.23–0.28 / −0.26 to −0.32 | 0.47–0.55 (2 of 5) | 0.63–0.69 | 1.80–1.90 | 0.101 |
+| Central 1 | 0.052–0.055 / 0.110–0.113 / 0.164–0.173 | +0.22–0.26 / −0.27 to −0.31 | 0.49–0.53 (1 of 5) | 0.61–0.70 | 2.09–2.28 | 0.109 |
+| Central 2 | 0.056–0.057 / 0.110–0.113 / 0.164–0.172 | +0.24–0.28 / −0.25 to −0.29 | 0.46–0.54 (4 of 5) | 0.60–0.72 | 1.65–1.78 | 0.112 |
+
+The L2 failure: per-leg seed 2 at (0.1, 0, −0.3) on evaluation seed 900005 turned at −0.203 rad/s (limit −0.21).
+
+What the learned adjustments did, against the base controller alone (step 3 of "Separating causes" measured
+against step 1, under the same servo randomisation):
+
+- **Torque went down, not enough.** At 0.1 m/s the worst joint's 95th percentile fell from 0.56–0.70 to 0.46–0.73
+  (per-leg) and 0.46–0.55 (central); at 0.15 m/s from 0.73–0.82 to 0.60–0.75. The central policies lowered it more
+  and more evenly in this run; 7 of 15 central evaluations and 2 of 15 per-leg evaluations at 0.1 m/s were at or
+  under 0.5.
+- **Tracking did not improve.** The base controller overshoots by 8–12 % at 0.1 m/s with the servo model; the
+  policies kept the overshoot (forward 0.106–0.113 m/s) and their mean relative tracking error (0.09–0.13) is about
+  the base controller's (0.096) or worse.
+- **The joint targets became rougher**, 1.4–2.3 times the base controller's mean second difference, the central
+  policies more than the per-leg ones in this run.
+- No falls, as with the base controller.
+
+These are differences measured on three seeds per form with one million steps each, in a first setup that misses
+its own conditions; they are not a claim about the forms in general, and the main comparison (ten seeds per form,
+longer runs) is still to be made.
+
+## Notes after the run (not changes to the conditions)
+
+- **Smoothness (L4) is probably dominated by the hold of the action.** The policy's adjustments are held for two
+  control periods and then jump; a jump of a foot-placement residual or of the step height is a step in the swing
+  foot's path, which shows directly in the second difference of the joint targets. The penalties on the actions'
+  differences (weights 0.05 and 0.02) and the CAPS terms (temporal 0.1, spatial 1.0; their unweighted values rose during
+  training to 0.02–0.07 and about 1e-5) were too weak to keep the adjustments still. Options for the maintainer, one at a time
+  as the redesign record asks: interpolate the adjustments over the policy period (or a first-order filter in the
+  base controller); raise the weights of the first and second differences or of the temporal CAPS term; or run the
+  policy every control period (50 Hz).
+- **Torque (L5)**: the base controller with the servo model misses the target by itself (0.56–0.70 at 0.1 m/s), so
+  the policy has to remove up to a third of the torque with ±0.02 m, ±15 % frequency and ±6 mm of step height. The
+  effort term (0.5 × mean squared torque ratio) is a mean over joints and time, while the condition is the worst
+  joint's 95th percentile; a term on the hip flexion's peaks, or the servo's armature and gain from the bench
+  identification (the servo model's record: the armature is the largest single cause), may matter more than the
+  policy.
+- **Tracking**: the speed term's width (0.05 m/s) gives almost no gradient for the base controller's overshoot of
+  about 0.01 m/s (exp(−0.04) = 0.96), so the policy had little reason to correct it; the overshoot is better removed
+  in the base controller itself (its speed integral with the servo model's delay), which is a change to #71's
+  controller rather than to the learning setup.
+- The logged mean reward per update jumps between about 0.7 and 2 because the time-limit bootstrap (the critic's
+  value added to the last reward of an episode) is included in it; it is not a measure of progress.
