@@ -7,7 +7,7 @@ period apart. Each foot follows a path in its leg's vertical plane, relative to 
 - on the ground (the first half of its period), it moves straight back by one stride, at the walking speed;
 - in the air (the second half), it moves forward again along a half-sine arc of height STEP_HEIGHT.
 
-The joint angles come from the two-link inverse kinematics of thigh and shank (lengths from erg.frame, which the
+The joint angles come from the two-link inverse kinematics of thigh and shank (lengths from erg.design, which the
 MuJoCo model follows). Abduction stays at zero. The trigonometric functions are erg.exactmath's (since #54), so that the
 leg firmware computes the same targets bit for bit.
 """
@@ -17,14 +17,15 @@ from erg.exactmath import acos, atan2, cos, sin
 
 import numpy as np
 
-from erg import frame, robot
+from erg import design, robot
 
-THIGH = frame.THIGH_LENGTH / 1000  # m
-SHANK = frame.SHANK_LENGTH / 1000  # m
-PERIOD = 0.35  # s, one full gait cycle (tuned in MuJoCo, Issue #32)
-STEP_HEIGHT = 0.015  # m, foot lift in the air (higher lifts drive the servos to their torque limit)
+THIGH = design.THIGH  # m
+SHANK = design.SHANK  # m
+PERIOD = 0.45  # s, one full gait cycle (0.35 s for the first body, #32; 0.45 s for body L1, #59, within the servo's speed)
+STEP_HEIGHT = 0.012  # m, foot lift in the air (0.015 m for the first body; lower for body L1, #59, within the servo's speed)
 # Height of the foot centre below the hip flexion shaft: that of the standing posture (robot.STAND).
-STAND_DEPTH = THIGH * cos(robot.STAND[1]) + SHANK * cos(robot.STAND[1] + robot.STAND[2])
+STAND_DEPTH = design.STAND_DEPTH
+FOOT_X = design.STAND_FOOT_X  # the foot's path is centred this far ahead of the hip flexion shaft
 # Phase of each leg in the order of robot.LEGS (FL, FR, HL, HR): diagonal pairs move together.
 PHASE = {"FL": 0.0, "FR": 0.5, "HL": 0.5, "HR": 0.0}
 
@@ -45,9 +46,9 @@ def foot_path(s: float, stride: float) -> tuple[float, float]:
     """Foot position at phase s in [0, 1) of its cycle, for the given stride (m)."""
     if s < 0.5:  # on the ground: from +stride/2 back to -stride/2
         u = s / 0.5
-        return stride / 2 - stride * u, -STAND_DEPTH
+        return stride / 2 - stride * u + FOOT_X, -STAND_DEPTH
     u = (s - 0.5) / 0.5  # in the air: forward again, lifted
-    return -stride / 2 + stride * u, -STAND_DEPTH + STEP_HEIGHT * sin(pi * u)
+    return -stride / 2 + stride * u + FOOT_X, -STAND_DEPTH + STEP_HEIGHT * sin(pi * u)
 
 
 def leg_targets(s: float, stride: float = 0.0) -> np.ndarray:
