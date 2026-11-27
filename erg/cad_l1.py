@@ -24,7 +24,7 @@ from math import degrees
 
 from build123d import Box, Cylinder, Location, Plane, Pos, Rot, Solid, mirror
 
-from erg import design
+from erg import design, knee_limit
 
 MM = 1000.0
 SERVO = (45.2, 24.7, 31.8)  # body length (x), width (y), height between the faces (z), in the servo's frame
@@ -42,7 +42,7 @@ THIGH, SHANK = design.THIGH * MM, design.SHANK * MM
 KNEE_DOWN = design.KNEE_SERVO_DOWN * MM
 SHAFT = design.SERVO_SHAFT * MM
 FOOT_R = design.FOOT_RADIUS * MM
-CRANK = 18.0  # crank radius, both ends of the parallelogram (12 mm until the maintainer's choice of 2026-11-27, #72)
+CRANK = knee_limit.CRANK * MM  # crank radius, both ends of the parallelogram (18 mm; erg/knee_limit.py)
 
 
 def servo() -> Solid:

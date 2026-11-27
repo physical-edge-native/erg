@@ -36,7 +36,7 @@ from pathlib import Path
 from build123d import Box, Cone, Cylinder, Location, Plane, Pos, Rot, Solid, export_step, export_stl, mirror
 
 from erg import cad_l1 as L
-from erg import design
+from erg import design, knee_limit
 
 # --- Servo interface (STS3215 case; check on the real servo) -------------------------------------------------------
 # In the servo's frame (erg/cad_l1.servo): body centred on the origin, length along x, shaft along z at x = SHAFT,
@@ -69,15 +69,16 @@ KNEE_GAP = 0.3  # axial play between the shank and the thigh's knee hub (the sle
 
 # --- Leg geometry (leg plane y = 0 in the thigh and shank frames, at body y = cad_l1.LEG_Y) ------------------------
 CRANK = L.CRANK  # crank radius, both ends of the parallelogram
-CRANK_PHASE = 0.0  # direction of both cranks at zero knee angle, from the thigh's +z (rad)
+CRANK_PHASE = knee_limit.CRANK_PHASE  # direction of both cranks at zero knee angle, from the thigh's +z (rad)
 BALL_Y = 7.0  # plane of the ball centres (outside the knee screw's head, which is flush at y = SHANK_Y1)
 BALL_HEIGHT = 4.0  # ball centre above the face the stud is screwed to; check on the real ball studs
 BALL_LINK_R, BALL_LINK_W = 3.5, 6.0  # socket of an M2 ball link: radius around the ball, width along the stud
 BALL_LINK_REACH = 9.0  # ball centre to the end of the link's threaded neck; check on the real ball links
 # Push rod: a carbon-fibre tube, assumed 4 mm outside and 3 mm inside diameter (pultruded); check on the real tube.
-TUBE_OD, TUBE_ID = 4.0, 3.0
+# The tube's size and stiffness, its buckling load and the rod's force are in erg/knee_limit.py (also used by the
+# simulation and the firmware's knee torque limit).
+TUBE_OD, TUBE_ID = knee_limit.TUBE_OD, knee_limit.TUBE_ID
 TUBE_DENSITY = 1.55e-6  # kg/mm^3, carbon fibre in epoxy
-TUBE_E = 100e3  # N/mm^2 (100 GPa), the low end of 100-130 GPa for pultruded carbon tubes, for the buckling load
 STUD_GLUE_DEPTH = 8.0  # each M2 threaded stud is glued (epoxy) this deep into the tube's 3 mm bore
 SHANK_Y0, SHANK_Y1 = -4.0, 3.0  # the shank's faces (it is printed lying on the y = SHANK_Y0 face)
 KNEE_HUB_R = 7.5  # shank's knee hub
@@ -368,20 +369,10 @@ def rod_mass() -> float:
     return rod().volume * TUBE_DENSITY
 
 
-def rod_buckling_load() -> float:
-    """Euler buckling load (N) of the tube, pinned at both ball centres (the conservative length ROD_LENGTH)."""
-    from math import pi
-    second_moment = pi / 64 * (TUBE_OD**4 - TUBE_ID**4)
-    return pi**2 * TUBE_E * second_moment / ROD_LENGTH**2
-
-
-ROD_SAFETY = 2.0  # safety factor on the buckling load
-
-
-def rod_force(knee: float, torque: float = design.SERVO_STALL_TORQUE) -> float:
-    """The rod's force (N) when the knee servo exerts `torque` (N*m) at knee angle `knee` (rad): the parallelogram
-    passes the torque on one to one, through the crank's lever arm CRANK * |sin(knee + CRANK_PHASE)|."""
-    return torque / (CRANK / 1000 * abs(sin(knee + CRANK_PHASE)))
+rod_buckling_load = knee_limit.rod_buckling_load
+ROD_SAFETY = knee_limit.ROD_SAFETY
+rod_force = knee_limit.rod_force
+assert ROD_LENGTH == knee_limit.ROD_LENGTH and CRANK == knee_limit.CRANK * 1000
 
 
 def ball_links() -> Solid:
