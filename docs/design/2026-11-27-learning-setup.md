@@ -301,3 +301,37 @@ measurement) is left for a later issue; it changes #71's controller and its cond
 
 Since the base controller is unchanged, the policies of step 1 are those of the first training above; nothing was
 re-trained.
+
+## Issue #86, step 2: adjustments ramped over the policy period (2026-11-27)
+
+Change: each leg's adjustments go linearly from the previous policy step's to the new one over the two control
+periods of a policy step (the first period gets the mean of the two, the second the new action), instead of being
+held for both (`erg.ppo.period_actions`, `Config.interpolate`, on by default for the base-controller mapping). A zero
+action is still the base controller bit for bit; evaluation applies the same ramp (tested bit for bit against
+training). Everything else as in the first training: seeds 0–2, 1,000,448 environment steps per run (1,693–1,797 s
+each, the six in parallel, about 30 minutes), the same evaluation.
+
+| Policy | Forward at 0.05 / 0.1 / 0.15 m/s | Yaw rate at (0.1, 0, ±0.3) | Torque at 0.1 m/s (seeds ≤ 0.5) | Torque at 0.15 m/s | Smoothness ratio at 0.1 m/s | Mean relative tracking error |
+|---|---|---|---|---|---|---|
+| Base controller | 0.050–0.056 / 0.108–0.112 / 0.163–0.176 | +0.27–0.31 / −0.29 to −0.24 | 0.56–0.70 (0 of 5) | 0.73–0.82 | 1.00 | 0.096 |
+| Per-leg 0 | 0.055–0.056 / 0.106–0.112 / 0.167–0.172 | +0.25–0.31 / −0.27 to −0.22 | 0.51–0.61 (0 of 5) | 0.57–0.72 | 1.11–1.27 | 0.124 |
+| Per-leg 1 | 0.054–0.058 / 0.109–0.112 / 0.165–0.170 | +0.25–0.32 / −0.30 to −0.24 | 0.54–0.64 (0 of 5) | 0.55–0.71 | 1.28–1.50 | 0.112 |
+| Per-leg 2 | 0.057–0.059 / 0.112–0.115 / 0.167–0.169 | +0.27–0.33 / −0.28 to −0.20 | 0.57–0.74 (0 of 5) | 0.62–0.78 | 1.31–1.52 | 0.144 |
+| Central 0 | 0.053–0.055 / 0.108–0.110 / 0.163–0.165 | +0.22–0.30 / −0.32 to −0.27 | 0.47–0.61 (1 of 5) | 0.60–0.74 | 1.19–1.38 | 0.091 |
+| Central 1 | 0.053–0.054 / 0.108–0.110 / 0.162–0.168 | +0.29–0.33 / −0.30 to −0.25 | 0.48–0.62 (1 of 5) | 0.61–0.66 | 1.09–1.23 | 0.085 |
+| Central 2 | 0.056 / 0.111–0.113 / 0.168–0.175 | +0.24–0.27 / −0.30 to −0.25 | 0.47–0.59 (1 of 5) | 0.64–0.74 | 1.17–1.34 | 0.121 |
+
+| # | Base controller | Per-leg 0 / 1 / 2 | Central 0 / 1 / 2 |
+|---|---|---|---|
+| L1 | pass | pass / pass / pass | pass / pass / pass |
+| L2 | pass | pass / pass / **fail** | pass / pass / pass |
+| L3 | pass | pass / pass / pass | pass / pass / pass |
+| L4 | — | **fail** / **fail** / **fail** | **fail** / **fail** / **fail** |
+| L5 | **fail** | **fail** / **fail** / **fail** | **fail** / **fail** / **fail** |
+
+The ramp lowered the smoothness ratio from 1.39–1.71 to 1.11–1.52 (per-leg) and from 1.65–2.28 to 1.09–1.38
+(central), but every policy is above 1.2 on at least one evaluation seed, so L4 still fails and step 3 follows. The
+per-leg seed 2 policy again turns at −0.203 rad/s on evaluation seed 900005 (L2). Torque at 0.1 m/s: 0.51–0.74
+per-leg (none of 15 evaluations at or under 0.5; 2 of 15 in the first training) and 0.47–0.62 central (3 of 15;
+7 of 15 before). Tracking error 0.112–0.144 per-leg and 0.085–0.121 central, against 0.096 for the base controller
+alone.
