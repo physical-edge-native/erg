@@ -2,6 +2,8 @@
 
 #include <math.h>
 
+#include "xmath.h"
+
 double leg_joint_angle(const leg_joint_cal_t *c, uint16_t position)
 {
     return (double)c->sign * ((double)((int)position - (int)c->zero) * LEG_RAD_PER_STEP);
@@ -36,9 +38,48 @@ void leg_imu(const leg_imu_mount_t *m, const int16_t acc_raw[3], const int16_t g
     }
 }
 
-void leg_observation(double obs[OBS_SIZE], const leg_joint_cal_t cal[ACT_JOINTS], const sts_state_t servo[ACT_JOINTS],
-                     const double acc[3], const double gyro[3], bool contact, const double command[3], int leg)
+double leg_clock(double phase, double freq)
 {
+    double f = freq < -1.0 ? -1.0 : (freq > 1.0 ? 1.0 : freq);
+    return xm_mod1(phase + CLOCK_STEP * (1.0 + FREQ_RANGE * f));
+}
+
+void leg_phase_values(double phase, double *c, double *s)
+{
+    xm_sincos(2.0 * 3.141592653589793 * phase, s, c);
+}
+
+/* erg.gait.foot_path and leg_angles, operation for operation. */
+void leg_base(double phase, double stride, double out[ACT_JOINTS])
+{
+    double s = xm_mod1(phase), x, z;
+    if (s < 0.5) {
+        double u = s / 0.5;
+        x = stride / 2 - stride * u;
+        z = -GAIT_STAND_DEPTH;
+    } else {
+        double u = (s - 0.5) / 0.5, sn, cs;
+        xm_sincos(3.141592653589793 * u, &sn, &cs);
+        x = -stride / 2 + stride * u;
+        z = -GAIT_STAND_DEPTH + GAIT_STEP_HEIGHT * sn;
+    }
+    double r2 = x * x + z * z;
+    double c = (r2 - GAIT_THIGH_SQ - GAIT_SHANK_SQ) / GAIT_TWO_THIGH_SHANK;
+    double knee = -xm_acos(c < -1.0 ? -1.0 : (c > 1.0 ? 1.0 : c));
+    double phi = xm_atan2(-x, -z);
+    double sk, ck;
+    xm_sincos(knee, &sk, &ck);
+    double flex = phi - xm_atan2(GAIT_SHANK * sk, GAIT_THIGH + GAIT_SHANK * ck);
+    out[0] = 0.0;
+    out[1] = flex;
+    out[2] = knee;
+}
+
+void leg_observation(double obs[OBS_SIZE], const leg_joint_cal_t cal[ACT_JOINTS], const sts_state_t servo[ACT_JOINTS],
+                     const double acc[3], const double gyro[3], bool contact, double phase, const double command[3],
+                     int leg)
+{
+    leg_phase_values(phase, &obs[OBS_PHASE], &obs[OBS_PHASE + 1]);
     for (int j = 0; j < ACT_JOINTS; j++) {
         obs[OBS_JOINT_POS + j] = leg_joint_angle(&cal[j], servo[j].position);
         obs[OBS_JOINT_VEL + j] = leg_joint_speed(&cal[j], servo[j].speed);
@@ -57,8 +98,9 @@ void leg_observation(double obs[OBS_SIZE], const leg_joint_cal_t cal[ACT_JOINTS]
     }
 }
 
-void leg_targets(const double action[ACT_JOINTS], double targets[ACT_JOINTS])
+void leg_targets(const double action[ACT_SIZE_ALL], double phase, double forward, double targets[ACT_JOINTS])
 {
-    static const double stand[ACT_JOINTS] = STAND_ANGLES;
-    for (int j = 0; j < ACT_JOINTS; j++) targets[j] = stand[j] + ACTION_SCALE * action[j];
+    double base[ACT_JOINTS];
+    leg_base(phase, forward * GAIT_PERIOD / 2, base);
+    for (int j = 0; j < ACT_JOINTS; j++) targets[j] = base[j] + ACTION_SCALE * action[j];
 }

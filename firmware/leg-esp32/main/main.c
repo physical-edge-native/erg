@@ -4,7 +4,9 @@
  * Every CONTROL_PERIOD_US (20 ms) the loop reads the leg's three STS3215 servos on their serial bus (through the
  * Waveshare Bus Servo Adapter (A)), the LSM6DSOX IMU on I2C and the foot switch on a GPIO, builds the leg's
  * observation in the order of the training environment (leg.c, obs_layout.h), runs the policy in Dyne's mlp-actor
- * (policy.c) and sends the three joint goals in one packet. Without a policy, the leg holds its standing posture.
+ * (policy.c) and sends the three joint goals in one packet: the base gait at the leg's gait phase plus the policy's
+ * corrections; then it advances the leg's gait clock by the policy's frequency correction. Without a policy the
+ * corrections are zero and the leg follows the base gait (stepping in place for a zero command).
  *
  * It prints, every REPORT_LOOPS loops, the time of each stage (servo bus, IMU, policy, goals) and of the whole loop,
  * and the jitter of the loop's start against its schedule, as "timing" lines for the design record.
@@ -202,12 +204,19 @@ void app_main(void)
 #if CONFIG_ERG_EMBED_POLICY
     have_policy = policy_init(wasm_start, (uint32_t)(wasm_end - wasm_start), model_start,
                               (uint32_t)(model_end - model_start));
+    if (have_policy && (policy_n_in() != OBS_SIZE || policy_n_out() != ACT_SIZE_ALL)) {
+        ESP_LOGE(TAG, "policy has %u inputs and %u outputs; this firmware needs %d and %d", (unsigned)policy_n_in(),
+                 (unsigned)policy_n_out(), OBS_SIZE, ACT_SIZE_ALL);
+        have_policy = false;
+    }
     if (have_policy) policy_check(check_start, (size_t)(check_end - check_start));
 #else
     ESP_LOGW(TAG, "built without a policy: holding the standing posture");
 #endif
 
     const double command[3] = {0.0, 0.0, 0.0};
+    const double phase_start[OBS_N_LEGS] = GAIT_PHASE_START;
+    double phase = phase_start[CONFIG_ERG_LEG_INDEX];
     double obs[OBS_SIZE], action[64] = {0}, targets[ACT_JOINTS];
     sts_state_t servo[ACT_JOINTS] = {0};
     int16_t acc_raw[3] = {0}, gyro_raw[3] = {0};
@@ -232,14 +241,15 @@ void app_main(void)
         if (!imu_ok || !imu_read(acc_raw, gyro_raw)) imu_errors++;
         leg_imu(&s_mount, acc_raw, gyro_raw, acc, gyro);
         bool contact = gpio_get_level(CONFIG_ERG_SWITCH_GPIO) == 0; /* switch to ground, pulled up */
-        leg_observation(obs, s_cal, servo, acc, gyro, contact, command, CONFIG_ERG_LEG_INDEX);
+        leg_observation(obs, s_cal, servo, acc, gyro, contact, phase, command, CONFIG_ERG_LEG_INDEX);
         int64_t t2 = esp_timer_get_time();
         if (!have_policy || policy_eval(obs, action) != 0) memset(action, 0, sizeof action);
-        leg_targets(action, targets);
+        leg_targets(action, phase, command[0], targets);
         int64_t t3 = esp_timer_get_time();
         uint16_t goals[ACT_JOINTS];
         for (int j = 0; j < ACT_JOINTS; j++) goals[j] = leg_goal(&s_cal[j], targets[j]);
         servo_write_goals(goals);
+        phase = leg_clock(phase, action[ACT_FREQ]);
         int64_t t4 = esp_timer_get_time();
 
         stat_add(&st_bus, t1 - t0);

@@ -9,6 +9,7 @@ parts arrive.
 | Point | Decision | Reason |
 |---|---|---|
 | Language and framework | C with ESP-IDF, reusing what Dyne's ESP32 firmware does (WAMR interpreter, same version range) | erg depends on Dyne where it can; Dyne already runs WebAssembly solvers on the ESP32 bit for bit with the PC. Rust with esp-hal was the other option |
+| Base gait's trigonometry (2026-11-27, after #51 gave the controllers a base gait) | Sine, cosine, arctangent and arccosine written with additions, multiplications, divisions and square roots only (`erg/exactmath.py` in training, `main/xmath.c` in the firmware, the same operations in the same order) | These operations are correctly rounded on every platform, so the gait phase and the base gait are bit for bit the same in training and on the ESP32-S3; library functions are not. The other option was the library functions with a stated tolerance. Accuracy: within 4e-15 of the library over the ranges used; the trot's joint targets change by less than 1e-12 rad |
 
 ## Choices made with the implementation (to be reviewed)
 

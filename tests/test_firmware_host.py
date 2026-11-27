@@ -8,8 +8,11 @@ Pass criteria:
   Feetech's documentation (FF FF 01 02 01 FB); replies are parsed to the same values, and replies with a wrong
   header, id, length or checksum are rejected;
 - the firmware's conversions (servo steps to joint angle, speed and load; joint angle to servo goal with clipping
-  and rounding; IMU steps to m/s^2 and rad/s with the board's mounting; policy output to joint targets) and its
-  observation equal the same definitions in Python bit for bit.
+  and rounding; IMU steps to m/s^2 and rad/s with the board's mounting) and its observation equal the same
+  definitions in Python bit for bit;
+- its arithmetic-only sine, cosine, arctangent and arccosine (xmath.c) equal erg.exactmath bit for bit, and so do
+  its gait clock, gait phase values and base gait (erg.env, erg.gait) and its joint targets (erg.ppo: base gait at
+  the leg's phase with the commanded forward speed's stride, plus the scaled corrections).
 
 The C code is compiled with the C compiler on the PATH (cc, gcc or clang), with floating-point contraction off so
 that no multiply-add is fused (Python, and the ESP32-S3's software double precision, round every operation). The
@@ -26,7 +29,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from erg import env, ppo, robot
+from erg import env, exactmath, gait, ppo, robot
 
 ROOT = Path(__file__).resolve().parent.parent
 FW = ROOT / "firmware" / "leg-esp32"
@@ -46,7 +49,7 @@ def host(tmp_path_factory):
     if cc is None:
         pytest.skip("no C compiler on the PATH")
     exe = tmp_path_factory.mktemp("fw") / ("host_check.exe" if sys.platform == "win32" else "host_check")
-    src = [FW / "host_test" / "host_check.c", FW / "main" / "sts.c", FW / "main" / "leg.c"]
+    src = [FW / "host_test" / "host_check.c", FW / "main" / "sts.c", FW / "main" / "leg.c", FW / "main" / "xmath.c"]
     subprocess.run([cc, "-std=c11", "-O2", "-ffp-contract=off", "-Wall", "-Werror", "-o", str(exe),
                     *map(str, src), "-lm"], check=True)
 
@@ -151,21 +154,55 @@ def test_observation_and_targets(host):
     rng = np.random.Generator(np.random.PCG64(11))
     joints = [(2048, 1, 2100, -40, 100), (1000, -1, 1500, 300, -250), (3000, 1, 2900, 0, 999)]
     acc, gyro, command = rng.normal(size=3), rng.normal(size=3), rng.uniform(-0.2, 0.2, 3)
+    phase = float(rng.uniform(0, 1))
+    e = env.Env(wire=False)
+    e.phase = np.full(env.N_LEGS, phase)
+    phase_values = list(e.phase_values()[0])
     for leg in range(env.N_LEGS):
         for contact in (0, 1):
             line = f"obs {leg} {contact} " + " ".join(" ".join(map(str, j)) for j in joints)
-            line += " " + " ".join(bits([*acc, *gyro, *command]))
+            line += " " + " ".join(bits([*acc, *gyro, phase, *command]))
             got = host([line])[0].split()
             want = [sign * ((p - zero) * RAD_PER_STEP) for zero, sign, p, _, _ in joints]
             want += [sign * (s * RAD_PER_STEP) for _, sign, _, s, _ in joints]
             want += [sign * (l / 1000.0) for _, sign, _, _, l in joints]
-            want += [*acc, *gyro, float(contact), *command, *np.eye(env.N_LEGS)[leg]]
+            want += [*acc, *gyro, float(contact), *phase_values, *command, *np.eye(env.N_LEGS)[leg]]
             slots = np.zeros((env.N_LEGS - 1, env.MSG_SLOT))
             slots[:, env.MSG_VALUES] = env.AGE_CAP
             want += list(slots.ravel())
             assert len(got) == env.OBS_SIZE
             assert got == bits(want)
-    a = rng.normal(size=3)
-    got = host(["targets " + " ".join(bits(a))])[0].split()
-    stand = robot.STAND[: env.ACT_SIZE]
-    assert got == bits([float(stand[j]) + ppo.ACTION_SCALE * float(a[j]) for j in range(3)])
+    for _ in range(20):
+        a = rng.normal(size=env.ACT_SIZE + env.LEARNED + 1)
+        p, forward = float(rng.uniform(0, 1)), float(rng.uniform(-0.23, 0.23))
+        got = host(["targets " + " ".join(bits([*a, p, forward]))])[0].split()
+        base = ppo.base_targets(np.array([p]), forward)[0]
+        assert got == bits(base + ppo.ACTION_SCALE * a[: env.ACT_SIZE])
+
+
+def test_exact_math_clock_and_base_gait(host):
+    rng = np.random.Generator(np.random.PCG64(7))
+    lines, want = [], []
+    for x in [*rng.uniform(-20, 20, 50), 0.0, -0.0, 1e-300, *(k * exactmath.HALF_PI for k in range(-8, 9))]:
+        lines.append(f"sincos {h(float(x))}")
+        want.append(bits(exactmath.sincos(float(x))))
+    for y, x in [*rng.normal(size=(50, 2)), (0.0, 0.0), (1.0, 0.0), (-1.0, 0.0), (0.0, -1.0), (-0.0, -1.0)]:
+        lines.append(f"atan2 {h(float(y))} {h(float(x))}")
+        want.append(bits([exactmath.atan2(float(y), float(x))]))
+    for c in [*rng.uniform(-1, 1, 50), -1.0, 1.0, 0.0]:
+        lines.append(f"acos {h(float(c))}")
+        want.append(bits([exactmath.acos(float(c))]))
+    e = env.Env(wire=False)
+    for _ in range(50):
+        p, f = float(rng.uniform(0, 1)), float(rng.uniform(-1.5, 1.5))
+        lines.append(f"clock {h(p)} {h(f)}")
+        nxt = (np.array([p]) + robot.CONTROL_PERIOD / gait.PERIOD * (1.0 + env.FREQ_RANGE * np.clip(f, -1.0, 1.0))) % 1.0
+        want.append(bits([nxt[0]]))
+        lines.append(f"phasevals {h(p)}")
+        e.phase = np.full(env.N_LEGS, p)
+        want.append(bits(e.phase_values()[0]))
+        stride = float(rng.uniform(-0.04, 0.04))
+        lines.append(f"base {h(p)} {h(stride)}")
+        want.append(bits(gait.leg_targets(p, stride)))
+    for line, got, w in zip(lines, host(lines), want):
+        assert got.split() == w, line

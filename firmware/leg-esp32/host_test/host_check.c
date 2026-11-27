@@ -8,8 +8,10 @@
  *   angle ZERO SIGN POS | speed ZERO SIGN SPEED | load ZERO SIGN LOAD -> double
  *   goalangle ZERO SIGN LO HI ANGLE                             -> steps
  *   imu A0 A1 A2 S0 S1 S2 AX AY AZ GX GY GZ                     -> 6 doubles (acc, gyro)
- *   obs LEG CONTACT (ZERO SIGN POS SPEED LOAD) x3 ACC3 GYRO3 CMD3 -> OBS_SIZE doubles
- *   targets A0 A1 A2                                            -> 3 doubles
+ *   obs LEG CONTACT (ZERO SIGN POS SPEED LOAD) x3 ACC3 GYRO3 PHASE CMD3 -> OBS_SIZE doubles
+ *   targets A0..A7 PHASE FORWARD                                -> 3 doubles
+ *   clock PHASE F | base PHASE STRIDE | phasevals PHASE          -> 1, 3 or 2 doubles
+ *   sincos X | atan2 Y X | acos C                               -> 2, 1 or 1 doubles
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,6 +19,7 @@
 
 #include "../main/leg.h"
 #include "../main/sts.h"
+#include "../main/xmath.h"
 
 static double rd(void)
 {
@@ -128,14 +131,38 @@ int main(void)
             double acc[3], gyro[3], command[3], obs[OBS_SIZE];
             for (int i = 0; i < 3; i++) acc[i] = rd();
             for (int i = 0; i < 3; i++) gyro[i] = rd();
+            double phase = rd();
             for (int i = 0; i < 3; i++) command[i] = rd();
-            leg_observation(obs, c, s, acc, gyro, contact != 0, command, leg);
+            leg_observation(obs, c, s, acc, gyro, contact != 0, phase, command, leg);
             for (int i = 0; i < OBS_SIZE; i++) pd(obs[i]);
         } else if (!strcmp(cmd, "targets")) {
-            double a[ACT_JOINTS], t[ACT_JOINTS];
-            for (int j = 0; j < ACT_JOINTS; j++) a[j] = rd();
-            leg_targets(a, t);
+            double a[ACT_SIZE_ALL], t[ACT_JOINTS];
+            for (int j = 0; j < ACT_SIZE_ALL; j++) a[j] = rd();
+            double phase = rd(), forward = rd();
+            leg_targets(a, phase, forward, t);
             for (int j = 0; j < ACT_JOINTS; j++) pd(t[j]);
+        } else if (!strcmp(cmd, "clock")) {
+            double p = rd(), f = rd();
+            pd(leg_clock(p, f));
+        } else if (!strcmp(cmd, "base")) {
+            double p = rd(), stride = rd(), out[ACT_JOINTS];
+            leg_base(p, stride, out);
+            for (int j = 0; j < ACT_JOINTS; j++) pd(out[j]);
+        } else if (!strcmp(cmd, "phasevals")) {
+            double c, sn;
+            leg_phase_values(rd(), &c, &sn);
+            pd(c);
+            pd(sn);
+        } else if (!strcmp(cmd, "sincos")) {
+            double sn, c;
+            xm_sincos(rd(), &sn, &c);
+            pd(sn);
+            pd(c);
+        } else if (!strcmp(cmd, "atan2")) {
+            double y = rd(), x = rd();
+            pd(xm_atan2(y, x));
+        } else if (!strcmp(cmd, "acos")) {
+            pd(xm_acos(rd()));
         } else {
             return 3;
         }

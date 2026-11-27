@@ -3,17 +3,22 @@
 Issue #54. Runs one leg of the erg robot on a Seeed Studio XIAO ESP32-S3: three Feetech STS3215 servos on their
 serial bus (through a Waveshare Bus Servo Adapter (A)), an LSM6DSOX IMU on I2C and the foot microswitch on a GPIO.
 Every 20 ms it reads the sensors, builds the leg's observation in the order of the training environment
-(`erg/env.py`), runs the policy in Dyne's `mlp-actor` (WebAssembly, interpreted by WAMR as in Dyne's own ESP32
-firmware) and sends the three joint goals. It prints the time of each stage and the loop's jitter.
+(`erg/env.py`, including the leg's gait phase), runs the policy in Dyne's `mlp-actor` (WebAssembly, interpreted by
+WAMR as in Dyne's own ESP32 firmware) and sends the three joint goals: the base gait (the trot of `erg/gait.py`) at
+the leg's own gait phase plus the policy's corrections; then it advances the leg's gait clock by the policy's
+frequency correction (#51). It prints the time of each stage and the loop's jitter.
 
 **Needs the hardware** to run. Without hardware, CI checks that it builds with ESP-IDF (`.github/workflows/ci.yml`,
 job "firmware") and the parts that do not touch the hardware are tested on the PC bit for bit against Python
-(`tests/test_firmware_host.py`: servo packets, conversions, observation).
+(`tests/test_firmware_host.py`: servo packets, conversions, observation, gait clock, base gait, joint targets).
+The base gait's trigonometry uses arithmetic-only functions (`main/xmath.c`, the same as `erg/exactmath.py` used in
+training), so these are bit for bit the same as in training.
 
 | File | What |
 |---|---|
 | `main/sts.c` | Servo bus packets (ping, read, write, sync write) and replies |
-| `main/leg.c` | Sensor values to the observation; policy output to servo goals |
+| `main/leg.c` | Sensor values to the observation; gait clock and base gait; policy output to servo goals |
+| `main/xmath.c` | Sine, cosine, arctangent, arccosine from correctly rounded operations only (as `erg/exactmath.py`) |
 | `main/obs_layout.h` | Observation layout, generated from `erg/env.py` by `scripts/gen_firmware_layout.py` |
 | `main/policy.c` | Dyne's `mlp-actor` in WAMR |
 | `main/main.c` | Drivers, the 20 ms loop, timing, the start-up bit check |

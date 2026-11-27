@@ -41,10 +41,19 @@ uint16_t leg_goal(const leg_joint_cal_t *c, double angle);
 void leg_imu(const leg_imu_mount_t *m, const int16_t acc_raw[3], const int16_t gyro_raw[3], double acc[3],
              double gyro[3]);
 
+/* The leg's gait clock (erg.env): the next phase from this one and the frequency correction (clipped to [-1, 1]). */
+double leg_clock(double phase, double freq);
+/* Cosine and sine of 2 pi phase (erg.env.Env.phase_values). */
+void leg_phase_values(double phase, double *c, double *s);
+/* The base gait's joint targets at a phase for a stride (erg.gait.leg_targets). */
+void leg_base(double phase, double stride, double out[ACT_JOINTS]);
+
 /* One leg's observation (OBS_SIZE values) with no messages received yet: every message slot reads zeros and the age
  * OBS_AGE_CAP, as in the training environment when nothing has arrived. */
 void leg_observation(double obs[OBS_SIZE], const leg_joint_cal_t cal[ACT_JOINTS], const sts_state_t servo[ACT_JOINTS],
-                     const double acc[3], const double gyro[3], bool contact, const double command[3], int leg);
+                     const double acc[3], const double gyro[3], bool contact, double phase, const double command[3],
+                     int leg);
 
-/* Joint targets from the policy's first ACT_JOINTS outputs: standing angle + ACTION_SCALE * output. */
-void leg_targets(const double action[ACT_JOINTS], double targets[ACT_JOINTS]);
+/* Joint targets (erg.ppo.Worker.step): the base gait at the phase, with the stride of the commanded forward speed,
+ * + ACTION_SCALE * the policy's first ACT_JOINTS outputs. */
+void leg_targets(const double action[ACT_SIZE_ALL], double phase, double forward, double targets[ACT_JOINTS]);

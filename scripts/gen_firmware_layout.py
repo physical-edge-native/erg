@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from erg import env, ppo, robot  # noqa: E402
+from erg import env, gait, ppo, robot  # noqa: E402
 
 HEADER = ROOT / "firmware" / "leg-esp32" / "main" / "obs_layout.h"
 
@@ -19,7 +19,7 @@ def text() -> str:
     o = 0
     fields = []
     for name, size in [("JOINT_POS", 3), ("JOINT_VEL", 3), ("JOINT_LOAD", 3), ("ACC", 3), ("GYRO", 3),
-                       ("CONTACT", 1), ("COMMAND", 3), ("LEG_ID", env.N_LEGS)]:
+                       ("CONTACT", 1), ("PHASE", env.PHASE_SIZE), ("COMMAND", 3), ("LEG_ID", env.N_LEGS)]:
         fields.append((name, o, size))
         o += size
     fields.append(("SLOTS", o, (env.N_LEGS - 1) * env.MSG_SLOT))
@@ -43,8 +43,25 @@ def text() -> str:
     lines.append("/* Standing posture of one leg (rad): abduction, hip flexion, knee. */")
     stand = ", ".join(repr(float(v)) for v in robot.STAND[: env.ACT_SIZE])
     lines.append(f"#define STAND_ANGLES {{{stand}}}")
-    lines.append("/* Joint target = standing angle + ACTION_SCALE * policy output (erg.ppo). */")
+    lines.append("/* Policy outputs per leg: joint corrections, learned values, then the clock frequency correction. */")
+    lines.append(f"#define ACT_FREQ {env.ACT_SIZE + env.LEARNED}")
+    lines.append(f"#define ACT_SIZE_ALL {env.ACT_SIZE + env.LEARNED + 1}")
+    lines.append("/* Joint target = base gait at the leg's phase + ACTION_SCALE * correction (erg.ppo). */")
     lines.append(f"#define ACTION_SCALE {ppo.ACTION_SCALE!r}")
+    lines.append("/* Gait clock (erg.env): phase += CLOCK_STEP * (1 + FREQ_RANGE * f), modulo 1. */")
+    lines.append(f"#define CLOCK_STEP {robot.CONTROL_PERIOD / gait.PERIOD!r}")
+    lines.append(f"#define FREQ_RANGE {env.FREQ_RANGE!r}")
+    phases = ", ".join(repr(gait.PHASE[leg]) for leg in robot.LEGS)
+    lines.append(f"#define GAIT_PHASE_START {{{phases}}}")
+    lines.append("/* Base gait (erg.gait), values computed in Python so that the firmware uses the same bits. */")
+    lines.append(f"#define GAIT_PERIOD {gait.PERIOD!r}")
+    lines.append(f"#define GAIT_STEP_HEIGHT {gait.STEP_HEIGHT!r}")
+    lines.append(f"#define GAIT_STAND_DEPTH {float(gait.STAND_DEPTH)!r}")
+    lines.append(f"#define GAIT_THIGH {gait.THIGH!r}")
+    lines.append(f"#define GAIT_SHANK {gait.SHANK!r}")
+    lines.append(f"#define GAIT_THIGH_SQ {gait.THIGH * gait.THIGH!r}")
+    lines.append(f"#define GAIT_SHANK_SQ {gait.SHANK * gait.SHANK!r}")
+    lines.append(f"#define GAIT_TWO_THIGH_SHANK {2 * gait.THIGH * gait.SHANK!r}")
     return "\n".join(lines) + "\n"
 
 
