@@ -19,8 +19,8 @@ ROOT = Path(__file__).resolve().parent.parent
 CRATE = ROOT / "crates" / "erg-links"
 TARGET = ROOT / "target" / "erg-links"
 
-N_VALUES = 11  # gravity direction 3, angular velocity 3, foot contact 1, learned vector 4
-MSG_LEN = 24 + 8 + 8 * N_VALUES  # 120 bytes
+N_VALUES = 13  # gravity direction 3, angular velocity 3, foot contact 1, learned vector 4, gait phase 2 (#51)
+MSG_LEN = 24 + 8 + 8 * N_VALUES  # 136 bytes (120 before #51)
 
 
 @functools.cache
@@ -74,7 +74,7 @@ class Links:
 
 def reference_bytes(src: int, step: int, t_us: int, values) -> bytes:
     """The same message built in Python from the layout written in Dyne's dyne-wire documentation (version 2,
-    kind IFACE_BAND = 1, quantity inertial = 3, then count = 1 and per_point = 11 before the values). Used to check
+    kind IFACE_BAND = 1, quantity inertial = 3, then count = 1 and per_point = 13 before the values). Used to check
     the module independently."""
     header = struct.pack("<BBBBIQQ", 2, 1, 3, 0, src, step, t_us)
     return header + struct.pack("<II", 1, N_VALUES) + np.ascontiguousarray(values, dtype="<f8").tobytes()
