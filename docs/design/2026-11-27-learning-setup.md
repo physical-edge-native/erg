@@ -249,3 +249,55 @@ longer runs) is still to be made.
   controller rather than to the learning setup.
 - The logged mean reward per update jumps between about 0.7 and 2 because the time-limit bootstrap (the critic's
   value added to the last reward of an episode) is included in it; it is not a measure of progress.
+
+## Issue #86, step 1: the base controller's speed overshoot with the servo model (2026-11-27)
+
+Issue #86 asks, one change at a time on the same seeds: (1) retune the base controller's speed integral for the servo
+model's overshoot and check #71's pass conditions with and without the servo model; (2) interpolate the policy's
+adjustments over the 40 ms policy period; (3) only if L4 still fails, stronger smoothness and CAPS weights. #82's
+pass conditions above are unchanged. Written with an AI assistant.
+
+`scripts/base_controller.py` gains `--servo none|nominal|random` to run #71's conditions with the servo model.
+
+**Result of step 1: no change to the base controller is adopted.** Measured (randomised servo, seeds 900001–900003,
+20 s, the measures of the evaluation above):
+
+| Speed integral (1/s; 1.0 now) | Forward at 0.05 / 0.1 / 0.15 m/s |
+|---|---|
+| 0 (none) | 0.049–0.051 / 0.104–0.108 / 0.144–0.158 |
+| 0.3 | 0.051–0.056 / 0.111–0.112 / 0.158–0.169 |
+| 1.0 | 0.050–0.054 / 0.108–0.110 / 0.163–0.172 |
+| 3.0 | 0.052–0.054 / 0.108–0.110 / 0.162–0.167 |
+
+The gain of the integral does not change the overshoot: the integral already brings the controller's **velocity
+estimate** to the command (seed 900001 at 0.1 m/s: estimate 0.101 m/s, true 0.108 m/s; with the model's position
+actuator 0.099 against 0.102). The estimate reads low because of the touch-down: in the first tenth of the gait cycle
+after touch-down, the stance measurement (the foot's motion relative to the hip) is about 0.14 m/s below the torso's
+speed (the foot is still settling and slides), and close to it in mid-stance. What was tried on the estimate and the
+touch-down, and why it was not kept:
+
+- Measuring only in mid-stance (cycle phase 0.15–0.45): the overshoot rose to 24–30 % at 0.1 m/s, since the body is
+  slower in mid-stance than on average. Leaving out only the first 0.05 or 0.1 of the cycle changed little.
+- More swing-leg retraction (10 mm over the last 0.4 of the swing, against 3 mm over the last 0.2), so that the foot
+  meets the ground moving less: with the servo model the overshoot fell to 5–8 % at 0.1 m/s and 6–9 % at 0.15 m/s
+  and the torque at 0.1 m/s to 0.56–0.63; but with the model's position actuator it broke #71's conditions (0.2 m/s
+  seed 0 yaw drift −0.145 rad/s; 0.3 m/s: 0.50–0.92 of the command, yaw drifts up to 0.59 rad/s, one fall). 6 and
+  15 mm, and 10 mm with a speed integral of 2 /s, gave overshoots of 2–10 % with the servo model (not run on #71's
+  conditions).
+
+#71's conditions with the unchanged controller (`scripts/base_controller.py --servo ...`, seeds 0–4, 20 s):
+
+| Servo | Result |
+|---|---|
+| none (the model's position actuators) | all conditions pass, as recorded in #71 |
+| nominal | fail: torque at 0.1 m/s 0.64–0.65 (condition 6); 0.2 m/s 0.240–0.260 (seeds 1 and 2 beyond +25 %); 0.3 m/s falls in 5 of 5 |
+| randomised | fail: torque at 0.1 m/s 0.65–0.73; 0.3 m/s falls in 5 of 5; 0.2 m/s 0.228–0.247 (within 25 %) |
+
+Turning, sideways, pushes at 0.2 m/s and determinism pass with the servo model too. Torque at 0.15 m/s (reported
+only): 0.74–0.78 nominal, 0.77–0.90 randomised. So the base controller with the servo model does not meet #71's
+conditions at 0.3 m/s and for torque; that holds before any learning and is outside the training commands
+(0–0.15 m/s). A better velocity estimate (for example the touch-down slip from the IMU, or a stride-averaged
+measurement) is left for a later issue; it changes #71's controller and its conditions have to be re-run.
+
+Since the base controller is unchanged, the policies of step 1 are those of the first training above; nothing was
+re-trained.

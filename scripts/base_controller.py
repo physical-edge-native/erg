@@ -5,10 +5,13 @@ format) and prints the mean forward and sideways speed, the yaw rate, the larges
 falls, and the worst joint's 95th percentile and maximum of torque / stall torque; then the torque at the speeds
 reported only, the pushes and determinism. Exit status 1 if a condition fails.
 
-    uv run python scripts/base_controller.py [--seeds 0,1,2,3,4] [--seconds 20]
+    uv run python scripts/base_controller.py [--seeds 0,1,2,3,4] [--seconds 20] [--servo none|nominal|random]
+
+--servo runs the same conditions with the servo model of erg.servo (#70), nominal or randomised from each seed.
 """
 
 import argparse
+import functools
 import sys
 from pathlib import Path
 
@@ -17,6 +20,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from erg import base_controller as bc  # noqa: E402
+from erg.servo import ServoParams  # noqa: E402
 
 
 def main() -> int:
@@ -25,7 +29,10 @@ def main() -> int:
     ap.add_argument("--seconds", type=float, default=20.0)
     ap.add_argument("--push-forces", default="",
                     help="report only: push forces (N, for 0.1 s, comma-separated) to count falls with")
+    ap.add_argument("--servo", choices=["none", "nominal", "random"], default="none")
     args = ap.parse_args()
+    if args.servo != "none":
+        bc.run = functools.partial(bc.run, servo=ServoParams(), randomize_servo=args.servo == "random")
     seeds = [int(s) for s in args.seeds.split(",")]
     if args.push_forces:
         for f in (float(x) for x in args.push_forces.split(",")):
