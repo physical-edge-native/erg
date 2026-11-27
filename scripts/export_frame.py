@@ -3,7 +3,7 @@
 Usage: uv run python scripts/export_frame.py [output directory, default build/frame]
 
 The files are not kept in the repository. The parts are layout-level (Issue #59): they fix the space each part takes
-and its mass; screw holes, pins and the push rod's ends are added after a test print of one leg.
+and its mass. The print-ready parts of one leg are written by scripts/export_leg.py (Issue #72).
 Parts are for the left legs; the right legs' are their mirror images (mirror them in the slicer, across the XZ plane).
 """
 

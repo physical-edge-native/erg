@@ -2,8 +2,8 @@
 
 This first CAD of the redesign fixes **where every part is and how much space it takes**, so that the body can be
 checked for collisions over the joint ranges and its printed masses estimated before anything is ordered. It is not
-yet print-ready: screw holes, bearing pins, the push rod's ball joints and the switch pocket are drawn in the
-following step, after a test print of one leg (the first body's detailed parts, removed in #59, are in the git history: erg/frame.py and erg/torso.py).
+yet print-ready: screw holes, bearing pins, the push rod's ball joints and the switch pocket are drawn on these
+placements in erg/cad_leg.py (Issue #72, one leg for a test print).
 
 Parts, for the front-left leg (the others are mirror images), all PLA at full infill:
 
