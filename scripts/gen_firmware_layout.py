@@ -88,7 +88,10 @@ def base_controller_lines() -> list[str]:
     lines = ["/* Base controller (erg.base_controller) and the policy's adjustments of it (Issue #85). */",
              f"#define N_ADJUST {bc.N_ADJUST}",
              f"#define ADJUST_SCALE {{{', '.join(_c(v) for v in bc.ADJUST_SCALE)}}}",
-             f"#define POLICY_PERIODS {ppo.POLICY_PERIODS} /* control periods per policy step */"]
+             f"#define POLICY_PERIODS {ppo.POLICY_PERIODS} /* control periods per policy step */",
+             "/* 1: ramp the adjustments from the previous policy step's over the policy step (erg.ppo.period_actions,",
+             " * the training default of the \"base\" mapping); 0: hold them (Issue #95). */",
+             f"#define POLICY_INTERPOLATE {int(bool(ppo.DEFAULTS['base']['interpolate']))}"]
     values = {
         "PI": bc.PI, "DT": bc.DT, "G": bc.G, "PERIOD": bc.PERIOD, "STANCE": bc.STANCE, "STEP_HEIGHT": bc.STEP_HEIGHT,
         "RETRACT": bc.RETRACT, "RETRACT_START": bc.RETRACT_START, "SWING_RAMP": bc.SWING_RAMP,

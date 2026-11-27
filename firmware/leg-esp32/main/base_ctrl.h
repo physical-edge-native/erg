@@ -36,7 +36,19 @@ typedef struct {
     double message[ACT_LEARNED]; /* the learned values the leg sends: velocity estimate x, y, speed integral x, y */
 } bc_output_t;
 
+/* The policy's actions over one policy step (erg.ppo.period_actions, Issue #95): the new action clipped to [-1, 1]
+ * and the previous policy step's (zeros at start). */
+typedef struct {
+    double prev[N_ADJUST], a[N_ADJUST];
+} bc_policy_t;
+
 void bc_init(bc_leg_t *c, int leg);
+void bc_policy_init(bc_policy_t *p);
+/* A new policy output (raw, N_ADJUST values): the current action becomes the previous one. */
+void bc_policy_new(bc_policy_t *p, const double raw[N_ADJUST]);
+/* The action applied in control period k (0 .. POLICY_PERIODS - 1) of the policy step: with interpolate, a linear
+ * ramp from the previous action that reaches the new one in the last period; otherwise the new one throughout. */
+void bc_policy_period(const bc_policy_t *p, int k, bool interpolate, double out[N_ADJUST]);
 /* The policy's N_ADJUST outputs, each clipped to [-1, 1] and scaled by ADJUST_SCALE. */
 void bc_adjust_from_action(const double a[N_ADJUST], bc_adjust_t *out);
 /* One control period, from the leg's observation row (OBS_SIZE values, as erg.base_controller.leg_input reads it:

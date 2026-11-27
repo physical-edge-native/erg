@@ -211,6 +211,7 @@ written before the run; the code follows the rows below.
   same operations in the same order, with `xmath.c` for the trigonometry and its constants generated from this
   module into `obs_layout.h` (`scripts/gen_firmware_layout.py`), so a retune only regenerates them.
   `tests/test_firmware_host.py` checks the C version against this one bit for bit over recorded walks: four
-  commands and seeds, with and without the policy's adjustments (held two control periods), with the neighbours'
+  commands and seeds, with and without the policy's adjustments (held two control periods; since Issue #95 also
+  ramped over the policy step as in training, `erg.ppo.period_actions`, ramped and held), with the neighbours'
   messages and, in one, 30 % message loss (missing and aged messages). On the robot the legs do not exchange
   messages yet (ESP-NOW is a later issue), so each leg's controller runs without its neighbours until then.

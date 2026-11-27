@@ -5,7 +5,8 @@
  * Waveshare Bus Servo Adapter (A)), the LSM6DSOX IMU on I2C and the foot switch on a GPIO, builds the leg's
  * observation in the order of the training environment (leg.c, obs_layout.h), runs the policy in Dyne's mlp-actor
  * (policy.c) every POLICY_PERIODS loops (25 Hz), and runs the leg's base controller (base_ctrl.c, Issue #85) with
- * the policy's adjustments, held in between; it sends the controller's three joint goals in one packet and advances
+ * the policy's adjustments, ramped linearly from the previous policy step's over the policy period as in training
+ * (POLICY_INTERPOLATE, Issue #95; held when it is 0); it sends the controller's three joint goals in one packet and advances
  * the leg's gait clock by the controller's frequency correction. Without a policy the adjustments are zero and the
  * base controller walks alone (stepping in place for a zero command). The controller's message values (velocity
  * estimate, speed integral) are kept for the neighbours; this stage has no links between legs yet, so the
@@ -244,6 +245,9 @@ void app_main(void)
     bc_leg_t ctrl;
     bc_init(&ctrl, CONFIG_ERG_LEG_INDEX);
     bc_adjust_t adj = {0};
+    bc_policy_t pol;
+    bc_policy_init(&pol);
+    double period_action[N_ADJUST];
     bc_output_t out;
     double learned[ACT_LEARNED] = {0}; /* the message values for the neighbours (erg.env clips them to [-1, 1]) */
     uint32_t period = 0;
@@ -278,10 +282,12 @@ void app_main(void)
         bool contact = gpio_get_level(CONFIG_ERG_SWITCH_GPIO) == 0; /* switch to ground, pulled up */
         leg_observation(obs, s_cal, servo, acc, gyro, contact, phase, command, CONFIG_ERG_LEG_INDEX);
         int64_t t2 = esp_timer_get_time();
-        if (period % POLICY_PERIODS == 0) { /* the policy's adjustments, held for POLICY_PERIODS periods */
+        if (period % POLICY_PERIODS == 0) { /* a new policy step: the policy's output, ramped or held over the step */
             if (!have_policy || policy_eval(obs, action) != 0) memset(action, 0, sizeof action);
-            bc_adjust_from_action(action, &adj);
+            bc_policy_new(&pol, action);
         }
+        bc_policy_period(&pol, (int)(period % POLICY_PERIODS), POLICY_INTERPOLATE, period_action);
+        bc_adjust_from_action(period_action, &adj);
         period++;
         bc_step(&ctrl, obs, &adj, &out);
         for (int i = 0; i < ACT_LEARNED; i++) {

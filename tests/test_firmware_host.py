@@ -275,3 +275,42 @@ def test_base_controller_and_its_adjustments(host, command, seed, adjust, loss):
         adj = bc.adjust_from_action(a)
         got = host(["bcadjust " + " ".join(bits(a))])[0].split()
         assert got == bits([adj.freq, adj.foot_dx, adj.foot_dy, adj.step_height, adj.place_gain, adj.att_gain])
+
+
+@pytest.mark.parametrize("interpolate", [True, False], ids=["ramp", "hold"])
+@pytest.mark.parametrize("command, seed", [((0.1, 0.0, 0.0), 4), ((0.12, 0.03, -0.2), 5)])
+def test_policy_actions_ramped_over_the_policy_step(host, interpolate, command, seed):
+    """The firmware's policy step (bc_policy_new, bc_policy_period) equals erg.ppo.period_actions and PolicyAdjust bit
+    for bit, ramped (the generated default, POLICY_INTERPOLATE) and held, and so do the base controller's joint
+    targets, frequency corrections and messages that follow, over 1.6 s of walking with the neighbours' messages
+    (Issue #95)."""
+    from erg import base_controller as bc
+
+    e = env.Env(links="neighbours", wire=False)
+    obs = e.reset(seed, command)
+    ctrls = [bc.LegController(leg) for leg in robot.LEGS]
+    rng = np.random.Generator(np.random.PCG64([seed, 95]))
+    prev = np.zeros((env.N_LEGS, bc.N_ADJUST))
+    raw, plan = prev, []
+    rec = [[] for _ in robot.LEGS]
+    for k in range(80):
+        j = k % ppo.POLICY_PERIODS
+        if j == 0:
+            raw = rng.normal(0.0, 0.8, (env.N_LEGS, bc.N_ADJUST))  # some beyond [-1, 1]
+            a = np.clip(raw, -1.0, 1.0)
+            plan = ppo.period_actions(prev, a, interpolate)
+            prev = a
+        outs = []
+        for i, (c, leg) in enumerate(zip(ctrls, robot.LEGS)):
+            o = c.step(bc.leg_input(obs[i], leg), bc.adjust_from_action(plan[j][i]))
+            rec[i].append((j, raw[i].copy(), obs[i].copy(), plan[j][i].copy(), o))
+            outs.append(o)
+        actions = np.array([list(o.targets) + list(o.message) for o in outs])
+        obs = e.step(actions, freq=[o.freq for o in outs])
+    for i, r in enumerate(rec):
+        lines = [f"bcreset {i}"]
+        lines += [f"bcpstep {int(interpolate)} {j} " + " ".join(bits([*rw, *o])) for j, rw, o, _, _ in r]
+        for k, ((_, _, _, p, py), got) in enumerate(zip(r, host(lines)[1:])):
+            assert got.split() == bits([*p, *py.targets, py.freq, *py.message]), (robot.LEGS[i], k)
+    if interpolate:  # the ramp is used: the first period of a step is neither the old nor the new action
+        assert any(not np.array_equal(p, rw.clip(-1, 1)) for j, rw, _, p, _ in rec[0] if j == 0)

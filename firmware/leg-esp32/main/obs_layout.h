@@ -52,6 +52,9 @@
 #define N_ADJUST 6
 #define ADJUST_SCALE {0.3, 0.02, 0.02, 0.006, 0.5, 0.5}
 #define POLICY_PERIODS 2 /* control periods per policy step */
+/* 1: ramp the adjustments from the previous policy step's over the policy step (erg.ppo.period_actions,
+ * the training default of the "base" mapping); 0: hold them (Issue #95). */
+#define POLICY_INTERPOLATE 1
 #define BC_PI 3.141592653589793
 #define BC_DT 0.02
 #define BC_G 9.81

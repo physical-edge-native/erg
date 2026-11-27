@@ -37,6 +37,31 @@ void bc_init(bc_leg_t *c, int leg)
     c->leg = leg;
 }
 
+void bc_policy_init(bc_policy_t *p)
+{
+    bc_policy_t z = {{0}, {0}};
+    *p = z;
+}
+
+void bc_policy_new(bc_policy_t *p, const double raw[N_ADJUST])
+{
+    for (int i = 0; i < N_ADJUST; i++) {
+        p->prev[i] = p->a[i];
+        p->a[i] = clip(raw[i], -1.0, 1.0);
+    }
+}
+
+/* erg.ppo.period_actions: prev + (a - prev) * ((k + 1) / POLICY_PERIODS) for all but the last period, then a. */
+void bc_policy_period(const bc_policy_t *p, int k, bool interpolate, double out[N_ADJUST])
+{
+    if (!interpolate || k >= POLICY_PERIODS - 1) {
+        for (int i = 0; i < N_ADJUST; i++) out[i] = p->a[i];
+        return;
+    }
+    double f = (double)(k + 1) / (double)POLICY_PERIODS;
+    for (int i = 0; i < N_ADJUST; i++) out[i] = p->prev[i] + (p->a[i] - p->prev[i]) * f;
+}
+
 void bc_adjust_from_action(const double a[N_ADJUST], bc_adjust_t *out)
 {
     double v[N_ADJUST];

@@ -18,6 +18,8 @@
  *   bcreset LEG                                                 -> (nothing) a new base controller for the leg
  *   bcadjust A0..A5                                             -> 6 doubles (the Adjust's fields)
  *   bcstep HAS_ADJ A0..A5 OBS...                                -> targets (3), frequency, message (4)
+ *   bcpstep INTERP K RAW0..RAW5 OBS...  (RAW read at K == 0: a new policy output) -> the period's action (6),
+ *                                                                  targets (3), frequency, message (4)
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -69,6 +71,8 @@ int main(void)
     uint8_t buf[256];
     bc_leg_t bc;
     bc_init(&bc, 0);
+    bc_policy_t pol;
+    bc_policy_init(&pol);
     while (scanf("%31s", cmd) == 1) {
         if (!strcmp(cmd, "ping")) {
             pbytes(buf, sts_ping(buf, sizeof buf, (uint8_t)ri()));
@@ -188,6 +192,22 @@ int main(void)
             pbytes(buf, sts_sync_write_u16(buf, sizeof buf, (uint8_t)addr, ids, vals, (size_t)n));
         } else if (!strcmp(cmd, "bcreset")) {
             bc_init(&bc, (int)ri());
+            bc_policy_init(&pol);
+        } else if (!strcmp(cmd, "bcpstep")) {
+            int interp = (int)ri(), k = (int)ri();
+            double raw[N_ADJUST], obs[OBS_SIZE], act[N_ADJUST];
+            for (int i = 0; i < N_ADJUST; i++) raw[i] = rd();
+            for (int i = 0; i < OBS_SIZE; i++) obs[i] = rd();
+            if (k == 0) bc_policy_new(&pol, raw);
+            bc_policy_period(&pol, k, interp != 0, act);
+            bc_adjust_t adj;
+            bc_adjust_from_action(act, &adj);
+            bc_output_t o;
+            bc_step(&bc, obs, &adj, &o);
+            for (int i = 0; i < N_ADJUST; i++) pd(act[i]);
+            for (int j = 0; j < ACT_JOINTS; j++) pd(o.targets[j]);
+            pd(o.freq);
+            for (int i = 0; i < ACT_LEARNED; i++) pd(o.message[i]);
         } else if (!strcmp(cmd, "bcadjust")) {
             double a[N_ADJUST];
             for (int i = 0; i < N_ADJUST; i++) a[i] = rd();

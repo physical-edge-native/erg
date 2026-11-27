@@ -7,8 +7,9 @@ Every 20 ms it reads the sensors, builds the leg's observation in the order of t
 phase coupling, velocity estimate, speed integral, foot placement, attitude, inverse kinematics) and sends its three
 joint goals; then it advances the leg's gait clock by the controller's frequency correction. Every two periods
 (25 Hz) it runs the policy in Dyne's `mlp-actor` (WebAssembly, interpreted by WAMR as in Dyne's own ESP32 firmware),
-whose six outputs adjust the base controller (frequency, foot-placement residuals, step height, gains; #82), held in
-between. Without a policy the base controller walks alone. It sets the knee servo's torque limit from the knee angle
+whose six outputs adjust the base controller (frequency, foot-placement residuals, step height, gains; #82). The
+adjustments are ramped linearly from the previous policy step's over the two periods, as in training since #86
+(#95; `POLICY_INTERPOLATE` in `obs_layout.h`, 0 to hold them instead). Without a policy the base controller walks alone. It sets the knee servo's torque limit from the knee angle
 (#81). It prints the time of each stage and the loop's jitter.
 
 **Needs the hardware** to run. Without hardware, CI checks that it builds with ESP-IDF (`.github/workflows/ci.yml`,
