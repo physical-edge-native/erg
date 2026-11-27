@@ -335,3 +335,43 @@ per-leg seed 2 policy again turns at −0.203 rad/s on evaluation seed 900005 (L
 per-leg (none of 15 evaluations at or under 0.5; 2 of 15 in the first training) and 0.47–0.62 central (3 of 15;
 7 of 15 before). Tracking error 0.112–0.144 per-leg and 0.085–0.121 central, against 0.096 for the base controller
 alone.
+
+## Issue #86, step 3: ten times the smoothness and CAPS weights (2026-11-27)
+
+Change (on top of step 2's ramp): penalties on the first and second differences of the actions 0.5 and 0.2 (0.05 and
+0.02 before), CAPS temporal 1.0 and spatial 10.0 (0.1 and 1.0 before). Everything else as in step 2: seeds 0–2,
+1,000,448 environment steps per run (1,640–1,784 s each, the six in parallel, about 30 minutes), the same evaluation.
+
+| Policy | Forward at 0.05 / 0.1 / 0.15 m/s | Yaw rate at (0.1, 0, ±0.3) | Torque at 0.1 m/s (seeds ≤ 0.5) | Torque at 0.15 m/s | Smoothness ratio at 0.1 m/s | Mean relative tracking error |
+|---|---|---|---|---|---|---|
+| Base controller | 0.050–0.056 / 0.108–0.112 / 0.163–0.176 | +0.27–0.31 / −0.29 to −0.24 | 0.56–0.70 (0 of 5) | 0.73–0.82 | 1.00 | 0.096 |
+| Per-leg 0 | 0.054–0.056 / 0.110–0.111 / 0.160–0.172 | +0.23–0.30 / −0.26 to −0.23 | 0.48–0.57 (1 of 5) | 0.59–0.68 | 1.05–1.13 | 0.124 |
+| Per-leg 1 | 0.054–0.055 / 0.109–0.111 / 0.164–0.169 | +0.26–0.31 / −0.32 to −0.25 | 0.55–0.71 (0 of 5) | 0.62–0.77 | 1.01–1.13 | 0.095 |
+| Per-leg 2 | 0.053–0.055 / 0.108–0.111 / 0.163–0.171 | +0.26–0.31 / −0.30 to −0.22 | 0.49–0.64 (1 of 5) | 0.62–0.73 | 1.04–1.18 | 0.099 |
+| Central 0 | 0.054–0.055 / 0.109–0.112 / 0.164–0.170 | +0.27–0.30 / −0.30 to −0.23 | 0.53–0.65 (0 of 5) | 0.67–0.75 | 1.06–1.12 | 0.091 |
+| Central 1 | 0.051–0.055 / 0.109–0.110 / 0.163–0.174 | +0.27–0.29 / −0.27 to −0.22 | 0.44–0.50 (5 of 5) | 0.54–0.69 | 0.98–1.03 | 0.097 |
+| Central 2 | 0.054–0.055 / 0.109–0.111 / 0.165–0.174 | +0.26–0.30 / −0.32 to −0.26 | 0.46–0.57 (1 of 5) | 0.62–0.73 | 1.05–1.19 | 0.092 |
+
+| # | Base controller | Per-leg 0 / 1 / 2 | Central 0 / 1 / 2 |
+|---|---|---|---|
+| L1 | pass | pass / pass / pass | pass / pass / pass |
+| L2 | pass | pass / pass / pass | pass / pass / pass |
+| L3 | pass | pass / pass / pass | pass / pass / pass |
+| L4 | — | pass / pass / pass | pass / pass / pass |
+| L5 | **fail** | **fail** / **fail** / **fail** | **fail** / pass / **fail** |
+
+**Per form: both forms now pass L1–L4 and fail L5** (a form passes only if all three of its policies pass on every
+evaluation seed). One central policy (seed 1) passes every condition; no per-leg policy does. At 0.1 m/s, 2 of 15
+per-leg evaluations and 6 of 15 central evaluations have torque at or under 0.5 (0.48–0.71 per-leg, 0.44–0.65
+central; the base controller alone 0.56–0.70). Smoothness ratios 1.01–1.18 per-leg and 0.98–1.19 central (limit 1.2).
+Tracking error 0.095–0.124 per-leg and 0.091–0.097 central, against 0.096 for the base controller alone: the
+policies still keep its overshoot (forward 0.108–0.112 m/s at 0.1 m/s).
+
+Over the three steps of #86, measured on three seeds per form with one million steps each: smoothness came within
+the limit only with the ramp and the stronger weights together; the torque margin at 0.1 m/s, which the base
+controller with the servo model misses by itself, remains the failing condition for both forms. As before, these
+are differences measured in this small setup, not a claim about either form in general.
+
+Total for #86: three sets of measurements of the base controller (about 15 minutes on four threads) and two
+trainings of six runs (about 30 minutes each on four threads, about 6 CPU-hours in all), plus three evaluations of
+about 80 s each.
