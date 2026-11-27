@@ -35,7 +35,7 @@ def main() -> None:
     ap.add_argument("--rows", type=int, default=32)
     a = ap.parse_args()
     torch.manual_seed(0)
-    agent = ppo.Agent("split")
+    agent = ppo.Agent("split", action="gait")  # the mapping the firmware runs (#51)
     if a.agent:
         agent.load_state_dict(torch.load(a.agent))
     OUT.mkdir(parents=True, exist_ok=True)

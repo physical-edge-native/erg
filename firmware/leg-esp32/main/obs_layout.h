@@ -21,7 +21,9 @@
 #define OBS_SLOTS 25 /* 42 values */
 /* Standing posture of one leg (rad): abduction, hip flexion, knee. */
 #define STAND_ANGLES {0.0, 0.8504476094685183, -1.5371584045999214}
-/* Policy outputs per leg: joint corrections, learned values, then the clock frequency correction. */
+/* Policy outputs per leg of erg.ppo's action mapping "gait" (#51), which this firmware runs: joint
+   corrections, learned values, then the clock frequency correction. The mapping "base" (#82, adjustments
+   of the base controller) is not ported yet. */
 #define ACT_FREQ 7
 #define ACT_SIZE_ALL 8
 /* Joint target = base gait at the leg's phase + ACTION_SCALE * correction (erg.ppo). */

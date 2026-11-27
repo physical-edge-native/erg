@@ -90,9 +90,20 @@ REACH_TOLERANCE = 0.2
 TERRAIN_MAX_HEIGHT = 0.02  # m
 
 
+# Commands of the learning setup on the base controller (Issue #82, docs/design/2026-11-27-learning-setup.md): the
+# walking speeds the maintainer set for the torque margin (forward 0-0.15 m/s), with some sideways and turning.
+WALK_COMMAND_LOW = np.array([0.0, -0.05, -0.3])  # m/s, m/s, rad/s
+WALK_COMMAND_HIGH = np.array([0.15, 0.05, 0.3])
+
+
 def draw_command(rng: np.random.Generator) -> np.ndarray:
     """A command drawn uniformly inside COMMAND_MAX, in both directions."""
     return rng.uniform(-COMMAND_MAX, COMMAND_MAX)
+
+
+def draw_walk_command(rng: np.random.Generator) -> np.ndarray:
+    """A command drawn uniformly between WALK_COMMAND_LOW and WALK_COMMAND_HIGH (Issue #82)."""
+    return rng.uniform(WALK_COMMAND_LOW, WALK_COMMAND_HIGH)
 
 
 class Env:

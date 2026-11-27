@@ -47,12 +47,12 @@ def test_clocks_advance_independently(central):
 
 
 def zero_action(form):
-    return np.zeros(ppo.Agent(form).act_dim * (N_LEGS if form == "split" else 1))
+    return np.zeros(ppo.Agent(form, "gait").act_dim * (N_LEGS if form == "split" else 1))
 
 
 def test_zero_corrections_follow_the_base_gait():
     for form in ("split", "central"):
-        w = ppo.Worker(ppo.Config(form=form), 0)
+        w = ppo.Worker(ppo.Config(form=form, action="gait"), 0)
         for _ in range(20):
             expected = ppo.base_targets(w.env.phase, w.env.command[0])
             w.step(zero_action(form))
@@ -79,7 +79,7 @@ def test_phase_reaches_only_linked_legs():
 
 
 def test_base_gait_alone_does_not_fall():
-    w = ppo.Worker(ppo.Config(form="split"), 0)
+    w = ppo.Worker(ppo.Config(form="split", action="gait"), 0)
     w.env.reset(0, np.zeros(3))
     for _ in range(ppo.EPISODE_STEPS):
         _, fell = w.step(zero_action("split"))
@@ -88,7 +88,7 @@ def test_base_gait_alone_does_not_fall():
 
 
 def test_base_gait_walks_forward():
-    w = ppo.Worker(ppo.Config(form="central"), 0)
+    w = ppo.Worker(ppo.Config(form="central", action="gait"), 0)
     w.env.reset(0, np.array([0.15, 0.0, 0.0]))
     x0 = w.env.data.qpos[0]
     for _ in range(ppo.EPISODE_STEPS):

@@ -117,6 +117,18 @@ class Adjust:
     att_gain: float = 0.0  # relative change of ATT_GAIN
 
 
+# The policy's adjustment of one leg (Issue #82, docs/design/2026-11-27-learning-setup.md): N_ADJUST values, each
+# clipped to [-1, 1] and multiplied by ADJUST_SCALE, in the order of Adjust's fields. A zero action is Adjust().
+N_ADJUST = 6
+ADJUST_SCALE = (0.3, 0.02, 0.02, 0.006, 0.5, 0.5)  # freq, m, m, m, relative, relative
+
+
+def adjust_from_action(a) -> Adjust:
+    """One leg's Adjust from the policy's N_ADJUST outputs (clipped to [-1, 1], then scaled by ADJUST_SCALE)."""
+    v = [_clip(float(x), -1.0, 1.0) * k for x, k in zip(a, ADJUST_SCALE, strict=True)]
+    return Adjust(freq=v[0], foot_dx=v[1], foot_dy=v[2], step_height=v[3], place_gain=v[4], att_gain=v[5])
+
+
 @dataclass
 class LegOutput:
     targets: tuple  # rad, abduction, hip flexion, knee
@@ -324,10 +336,12 @@ def _yaw(q) -> float:
 
 def run(command, seed: int = 0, seconds: float = 20.0, window: float = 5.0, push: float = 0.0,
         push_time: float = 10.0, push_force: float = PUSH_FORCE, links: str = "neighbours",
-        wire: bool = True) -> Result:
+        wire: bool = True, servo=None, randomize_servo: bool = False, adjust=None) -> Result:
     """Walk with the base controller for `seconds` from the standing posture (reset noise from `seed`), and measure
-    over [window, seconds]. `push`: +1 or -1 for a sideways push to the left or right at `push_time`, 0 for none."""
-    e = env_mod.Env(links=links, wire=wire)
+    over [window, seconds]. `push`: +1 or -1 for a sideways push to the left or right at `push_time`, 0 for none.
+    `servo`, `randomize_servo`: erg.env's servo model (Issue #70). `adjust`: None for the base controller alone, or a
+    callable (control step, observations) -> four Adjust, e.g. a learned policy (Issue #82)."""
+    e = env_mod.Env(links=links, wire=wire, servo=servo, randomize_servo=randomize_servo)
     obs = e.reset(seed, command)
     ctrls = [LegController(leg) for leg in LEGS]
     torso = e.model.body("torso").id
@@ -337,7 +351,8 @@ def run(command, seed: int = 0, seconds: float = 20.0, window: float = 5.0, push
     yaws, vels, torques, all_targets = [], [], [], []
     max_tilt, min_height = 0.0, np.inf
     for k in range(steps):
-        outs = [c.step(leg_input(obs[i], leg)) for i, (c, leg) in enumerate(zip(ctrls, LEGS))]
+        adjs = adjust(k, obs) if adjust is not None else [None] * len(LEGS)
+        outs = [c.step(leg_input(obs[i], leg), adjs[i]) for i, (c, leg) in enumerate(zip(ctrls, LEGS))]
         actions = np.array([list(o.targets) + list(o.message) for o in outs])
         all_targets.append(actions[:, :3].copy())
         e.data.xfrc_applied[torso] = 0.0

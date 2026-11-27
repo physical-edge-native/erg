@@ -114,7 +114,9 @@ control with reinforcement learning"):
 
 As in the training record, except where stated: 8 environments, 64 policy steps (128 control periods) per
 environment between updates, 4 epochs of 4 minibatches, discount 0.99 per policy step, GAE λ 0.95, clip 0.2,
-learning rate 3e-4, value coefficient 0.5, gradient norm 1.0, entropy bonus 0.0 (changed from 0.01: the policy
+learning rate 3e-4, value coefficient 0.5, gradient norm 1.0 clipped separately for the actor and the critic
+(added with the implementation, before any training: with one norm for both, the critic's large gradients early
+in training, value losses of about 50, shrink the actor's step), entropy bonus 0.0 (changed from 0.01: the policy
 starts at the base controller and only needs small adjustments), initial log standard deviation −1.6 (about 0.2 of
 an output's unit range: ±0.004 m of foot placement).
 
