@@ -215,3 +215,51 @@ written before the run; the code follows the rows below.
   ramped over the policy step as in training, `erg.ppo.period_actions`, ramped and held), with the neighbours'
   messages and, in one, 30 % message loss (missing and aged messages). On the robot the legs do not exchange
   messages yet (ESP-NOW is a later issue), so each leg's controller runs without its neighbours until then.
+
+## Velocity estimate corrected for the rolling foot (Issue #94, 2026-11-27)
+
+Written with an AI assistant. The pass conditions above are unchanged.
+
+**Cause.** With the servo model of #70 the controller overshot the command by 8–12 % at 0.1–0.15 m/s and 14–30 % at
+0.2 m/s (Issue #86, recorded in 2026-11-27-learning-setup.md). The speed integral brings the controller's velocity
+estimate to the command, so the overshoot is the estimate's error: it read about 7 % low (seed 900001 at 0.1 m/s:
+0.101 against a true 0.108 m/s). The stance measurement is the foot centre's motion relative to the hip; but the
+foot is a sphere of 12 mm radius fixed to the shank and rolls on the ground as the leg rotates, so its centre moves
+forward by the radius times the shank's pitch rate. Over a stance this is about the foot radius ÷ the leg length
+(12 mm ÷ about 140 mm, 8 %). Measured over the stance samples of that run, the true speed minus the measurement was
+0.007 m/s on average, and the radius times the shank's pitch rate 0.010 m/s. Touch-down was suspected first (the
+measurement reads up to 0.14 m/s low in the first tenth of the cycle), but with the servo model the foot is rarely on
+the ground then, and leaving those samples out did not change the overshoot.
+
+**Change.** The stance measurement adds the rolling foot's motion:
+`vx = -(Δfoot x)/DT - (ωy fz - ωz fy) + ROLL_RADIUS ((Δ(hip flexion + knee))/DT + ωy)`, with
+`ROLL_RADIUS = erg.design.FOOT_RADIUS` (0.012 m). Plain operations only; the leg keeps one more value (the previous
+hip flexion + knee angle). Sideways is not corrected: the sideways conditions passed before and after.
+
+Also tried and not kept: predicting the estimate from the accelerometer between stance measurements (gravity removed
+with the attitude estimate) and using the stance measurement only after the foot had settled for 0–5 periods: the
+accelerometer's bias after removing gravity (about −0.15 m/s² while trotting) made the estimate run away and the
+robot fell at every speed.
+
+**Results** (`scripts/base_controller.py --servo none|nominal|random`, seeds 0–4, 20 s):
+
+| Servo | Forward ÷ command at 0.1 / 0.2 / 0.3 m/s | Torque p95 at 0.1 / 0.15 / 0.2 m/s | Conditions |
+|---|---|---|---|
+| none, before | 0.98–1.01 / 0.98–1.01 / 0.93–0.99 | 0.34–0.35 / 0.52–0.55 / 0.72–0.73 | all pass |
+| none, after | 0.92–0.94 / 0.89–0.94 / 0.86–0.93 | 0.33–0.34 / 0.48–0.49 / 0.65–0.67 | **all pass** |
+| nominal, before | 1.11–1.12 / 1.20–1.30 / falls 5 of 5 | 0.64–0.65 / 0.74–0.78 / 1.00 | fail: 6 (torque), 1 (0.2 m/s on 2 seeds) and 1, 4 (0.3 m/s falls) |
+| nominal, after | 1.00–1.01 / 1.05–1.11 / falls 5 of 5 | 0.65–0.66 / 0.71–0.72 / 0.93–1.00 | fail: 6 (torque), 1 and 4 (0.3 m/s falls) |
+| randomised, before | 1.10–1.11 / 1.14–1.24 / falls 5 of 5 | 0.65–0.73 / 0.77–0.90 / 1.00 | fail: 6 (torque), 1 and 4 (0.3 m/s falls) |
+| randomised, after | 1.00–1.01 / 1.04–1.07 / falls 4 of 5 | 0.66–0.71 / 0.73–0.84 / 0.97–1.00 | fail: 6 (torque), 1 and 4 (0.3 m/s falls) |
+
+("Before" is the controller of #71 as run in Issue #86; the position-actuator "before" row is the results section
+above.) Without the servo model all conditions still pass; the robot now walks 6–14 % below the command there (it
+was within 2–7 %), because the estimate now reads 2–5 % high with the model's stiffer, sliding position actuators.
+With the servo model the overshoot is gone at 0.1 m/s (1.00–1.01, from 1.10–1.12) and within the ±10 % target of #94 at 0.2 m/s on 9
+of 10 runs (up to 1.11 with the nominal servo); turning, sideways, pushes and determinism pass. The servo model's
+failures that remain are the torque condition and falls at 0.3 m/s (both outside the learning setup's commands).
+Estimate against the torso's true speed (seed 900001, 5–20 s): with the servo model 0.051 / 0.100 / 0.152 m/s
+against 0.047 / 0.099 / 0.149 m/s at 0.05 / 0.1 / 0.15 m/s.
+
+The leg firmware's port has the same term and the one more value of state (Issue #98), checked bit for bit
+against this controller in `tests/test_firmware_host.py`.

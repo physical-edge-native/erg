@@ -375,3 +375,36 @@ are differences measured in this small setup, not a claim about either form in g
 Total for #86: three sets of measurements of the base controller (about 15 minutes on four threads) and two
 trainings of six runs (about 30 minutes each on four threads, about 6 CPU-hours in all), plus three evaluations of
 about 80 s each.
+
+## Re-trained on the corrected velocity estimate (Issue #94, 2026-11-27)
+
+The base controller's velocity estimate now adds the rolling foot's motion (Issue #94; base controller record,
+"Velocity estimate corrected for the rolling foot"), which removes its speed overshoot with the servo model. Since
+this changes the controller under the policy, both forms were trained once more with step 3's settings of #86, the
+same seeds 0–2 and budget (1,000,448 environment steps per run; 1,632–1,767 s each, the six in parallel, about
+30 minutes), and evaluated the same way. The smoothness ratio is against the new base controller.
+
+| Policy | Forward at 0.05 / 0.1 / 0.15 m/s | Yaw rate at (0.1, 0, ±0.3) | Torque at 0.1 m/s (seeds ≤ 0.5) | Torque at 0.15 m/s | Smoothness ratio at 0.1 m/s | Mean relative tracking error |
+|---|---|---|---|---|---|---|
+| Base controller | 0.044–0.051 / 0.098–0.101 / 0.148–0.157 | +0.28–0.31 / −0.30 to −0.25 | 0.54–0.68 (0 of 5) | 0.68–0.74 | 1.00 | 0.037 |
+| Per-leg 0 | 0.049–0.050 / 0.098–0.100 / 0.148–0.155 | +0.23–0.31 / −0.31 to −0.23 | 0.50–0.64 (0 of 5) | 0.59–0.69 | 0.95–1.10 | 0.045 |
+| Per-leg 1 | 0.049–0.051 / 0.098–0.099 / 0.148–0.151 | +0.27–0.31 / −0.31 to −0.22 | 0.43–0.54 (4 of 5) | 0.52–0.60 | 0.92–1.02 | 0.029 |
+| Per-leg 2 | 0.049–0.050 / 0.097–0.103 / 0.146–0.152 | +0.29–0.34 / −0.29 to −0.21 | 0.58–0.65 (0 of 5) | 0.65–0.70 | 0.97–1.23 | 0.032 |
+| Central 0 | 0.048–0.049 / 0.097–0.099 / 0.147–0.151 | +0.26–0.31 / −0.32 to −0.27 | 0.49–0.59 (1 of 5) | 0.59–0.64 | 1.05–1.15 | 0.025 |
+| Central 1 | 0.048–0.049 / 0.097–0.100 / 0.148–0.152 | +0.25–0.31 / −0.32 to −0.27 | 0.50–0.65 (1 of 5) | 0.60–0.72 | 1.02–1.13 | 0.026 |
+| Central 2 | 0.048–0.050 / 0.097–0.101 / 0.148–0.153 | +0.29–0.30 / −0.33 to −0.24 | 0.41–0.52 (2 of 5) | 0.54–0.58 | 1.00–1.12 | 0.026 |
+
+| # | Base controller | Per-leg 0 / 1 / 2 | Central 0 / 1 / 2 |
+|---|---|---|---|
+| L1 | pass | pass / pass / pass | pass / pass / pass |
+| L2 | pass | pass / pass / pass | pass / pass / pass |
+| L3 | pass | pass / pass / pass | pass / pass / pass |
+| L4 | — | pass / pass / **fail** | pass / pass / pass |
+| L5 | **fail** | **fail** / **fail** / **fail** | **fail** / **fail** / **fail** |
+
+Per form: the central form passes L1–L4 and fails L5; the per-leg form fails L4 (seed 2, 1.23 on one evaluation seed,
+limit 1.2) and L5. No policy passes L5 on every evaluation seed; 4 of 15 per-leg and 4 of 15 central evaluations at
+0.1 m/s are at or under 0.5 (0.43–0.65 per-leg, 0.41–0.65 central; the base controller alone 0.54–0.68). The speed
+overshoot is gone: forward 0.097–0.103 m/s at 0.1 m/s, and the mean relative tracking error fell to 0.025–0.045
+(0.091–0.124 before the correction; the base controller alone 0.037, from 0.096). Measured on three seeds per form;
+not a claim about either form in general.
