@@ -14,7 +14,8 @@ import pytest
 
 from erg import base_controller as bc
 from erg import env as env_mod
-from erg import links, robot
+from erg import links, reward, robot
+from erg.servo import ServoParams
 
 SECONDS = 10.0
 WINDOW = 4.0
@@ -135,3 +136,45 @@ def test_torque_condition():
     reported by scripts/base_controller.py, not asserted."""
     r = bc.run(bc.TORQUE_COMMAND, 0, seconds=SECONDS, window=WINDOW)
     assert r.torque_p95 <= bc.TORQUE_P95
+
+
+def test_stance_measurement_adds_the_rolling_foot():
+    """Issue #94: the stance measurement is the foot centre's motion relative to the hip plus the foot radius times
+    the shank's pitch rate (the foot rolls on the ground)."""
+    leg, dt = "FL", bc.DT
+    q0, q1 = (0.0, 0.30, -0.80), (0.0, 0.26, -0.78)
+    c = bc.LegController(leg)
+    inp = dict(leg=leg, acc=(0.0, 0.0, bc.G), gyro=(0.0, 0.0, 0.0), contact=True, phase_cs=(1.0, 0.0),
+               command=(0.0, 0.0, 0.0), neighbours={})
+    c.step(bc.LegInput(joint_pos=q0, **inp))
+    c.step(bc.LegInput(joint_pos=q1, **inp))
+    _, _, hx, _ = bc.leg_frame(leg)
+    fx0, fx1 = bc.foot_position(leg, q0)[0] + hx, bc.foot_position(leg, q1)[0] + hx
+    shank0, shank1 = q0[1] + q0[2], q1[1] + q1[2]
+    v = -(fx1 - fx0) / dt + bc.ROLL_RADIUS * ((shank1 - shank0) / dt)
+    assert c.vel[0] == pytest.approx(dt / (bc.VEL_TAU + dt) * v, rel=1e-12)
+    assert bc.ROLL_RADIUS == pytest.approx(0.012)  # the foot's radius (erg.design.FOOT_RADIUS)
+
+
+def mean_estimate(servo, seconds=10.0):
+    e = env_mod.Env(servo=servo, randomize_servo=False)
+    obs = e.reset(0, (0.1, 0.0, 0.0))
+    ctrls = [bc.LegController(leg) for leg in bc.LEGS]
+    est, true = [], []
+    for k in range(round(seconds / bc.DT)):
+        outs = [c.step(bc.leg_input(obs[i], leg)) for i, (c, leg) in enumerate(zip(ctrls, bc.LEGS))]
+        obs = e.step(np.array([list(o.targets) + list(o.message) for o in outs]), freq=[o.freq for o in outs])
+        if k * bc.DT >= WINDOW:
+            est.append(np.mean([c.vel[0] for c in ctrls]))
+            true.append(reward.heading_velocity(e.data)[0][0])
+    return float(np.mean(est)), float(np.mean(true))
+
+
+def test_velocity_estimate_with_the_servo_model(monkeypatch):
+    """Issue #94: with the servo model the estimate is within 5 % of the torso's true forward speed at 0.1 m/s;
+    without the rolling correction it read about 7 % low."""
+    est, true = mean_estimate(ServoParams())
+    assert abs(est - true) <= 0.05 * true
+    monkeypatch.setattr(bc, "ROLL_RADIUS", 0.0)
+    est0, true0 = mean_estimate(ServoParams())
+    assert est0 < 0.95 * true0

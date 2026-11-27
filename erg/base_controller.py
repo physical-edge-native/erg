@@ -62,6 +62,12 @@ COUPLING = 0.5  # frequency correction per unit of phase error (sine of the erro
 SPEED_INTEGRAL = 1.0  # 1/s, integral of the speed error into the stance speed
 INTEGRAL_LIMIT = 0.15  # m/s, bound on the integral term
 VEL_TAU = 0.15  # s, low-pass filter of the velocity estimate
+# The foot is a sphere fixed to the shank and rolls on the ground during the stance, so its centre moves forward by
+# the radius times the shank's pitch rate (hip flexion and knee rates plus the body's pitch rate) while the leg
+# rotates; the stance measurement (the foot centre's motion relative to the hip) adds it back (Issue #94). Without it
+# the measurement read about 7 % low (foot radius / leg length) and the robot overshot the command by 8-12 % with
+# the servo model. 0 turns the correction off.
+ROLL_RADIUS = design.FOOT_RADIUS  # m
 ATT_TAU = 1.0  # s, complementary filter of roll and pitch (gyroscope below, accelerometer above this time)
 ACC_TRUST = 0.2  # the accelerometer corrects the attitude only when its reading is within this fraction of g squared
 ATT_GAIN = 0.5  # leg-length change per metre of hip height error
@@ -205,6 +211,7 @@ class LegController:
     roll: float = 0.0
     pitch: float = 0.0
     prev_foot: tuple | None = None  # foot position at the previous period, if the foot was on the ground
+    prev_shank: float = 0.0  # hip flexion + knee angle at the previous period
     prev_s: float | None = None
     td: tuple = (0.0, 0.0)  # touch-down offset from the neutral point (forward, sideways)
     lo: tuple = (0.0, 0.0)  # lift-off offset
@@ -245,12 +252,15 @@ class LegController:
         foot = foot_position(self.leg, inp.joint_pos)
         fx, fy, fz = foot[0] + hx, foot[1] + hy, foot[2]  # from the torso's origin
         wx, wy, wz = inp.gyro
+        shank = inp.joint_pos[1] + inp.joint_pos[2]
         if inp.contact and self.prev_foot is not None:
-            vx = -(fx - self.prev_foot[0]) / DT - (wy * fz - wz * fy)
+            roll = ROLL_RADIUS * ((shank - self.prev_shank) / DT + wy)  # the rolling foot's centre, forward
+            vx = -(fx - self.prev_foot[0]) / DT - (wy * fz - wz * fy) + roll
             vy = -(fy - self.prev_foot[1]) / DT - (wz * fx - wx * fz)
             a = DT / (VEL_TAU + DT)
             vel = [vel[0] + a * (vx - vel[0]), vel[1] + a * (vy - vel[1])]
         self.prev_foot = (fx, fy) if inp.contact else None
+        self.prev_shank = shank
         self.vel = vel
         ex, ey = vx_c - vel[0], vy_c - vel[1]
         self.integral = [_clip(integral[0] + SPEED_INTEGRAL * ex * DT, -INTEGRAL_LIMIT, INTEGRAL_LIMIT),
