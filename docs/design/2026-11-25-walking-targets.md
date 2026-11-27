@@ -15,6 +15,7 @@ checks them.
 | A commanded speed counts as reached | The robot walks 10 s without a fall, and its mean speed over those 10 s is within 20 % of the command (`REACH_SECONDS`, `REACH_TOLERANCE`) |
 | Uneven test ground | Blocks from 0 to 2 cm high (about a tenth of the leg length), laid out from a seed; used only for evaluation, never in training (`TERRAIN_MAX_HEIGHT`). The ground itself is built in a later issue |
 | Scope | Acrobatic motion (jumps, flips) stays outside erg: it needs actuators that control torque directly, which raise the cost of the robot by about five to twenty times, against erg's aim of a cheap robot (maintainer's decision, 2026-11-25). Actuators for an acrobatic quadruped at about ¥100,000 are proposed as a separate future task of the organization (physical-edge-native/pena-meta#9) |
+| Standing up after a fall (added 2026-11-27, #58) | Required: the robot returns to standing from lying on either side. First as a hand-made motion, the same for both forms; learning it comes later. Acrobatic motion stays outside erg ([redesign record](2026-11-27-redesign.md)) |
 
 ## Why 0.23 m/s
 
