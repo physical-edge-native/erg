@@ -25,3 +25,15 @@ def test_targets_are_deterministic():
     a = dataclasses.asdict(body_targets.compute())
     b = dataclasses.asdict(body_targets.compute())
     assert a == b
+
+
+def test_servo_model_targets_are_reported():
+    """With ServoParams.position_actuator() the targets are those of the model bit for bit; with the nominal servo
+    model (Issue #70) they are finite and deterministic (their values are reported in
+    docs/design/2026-11-27-servo-model.md, not checked against the targets here)."""
+    from erg import servo
+
+    assert body_targets.compute(servo=servo.ServoParams.position_actuator()) == body_targets.compute()
+    a = dataclasses.asdict(body_targets.compute(servo=servo.ServoParams()))
+    assert all(math.isfinite(v) for v in a.values())
+    assert a == dataclasses.asdict(body_targets.compute(servo=servo.ServoParams()))

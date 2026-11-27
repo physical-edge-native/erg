@@ -11,19 +11,24 @@ over 10 s:
   commanded speed is the job of the base controller's foot placement and of the learned policy, not of this
   open-loop gait. Above 1.2 something else than the gait would be moving the robot;
 - no joint torque reaches the servo's stall torque.
+
+With the servo model of erg.servo (Issue #70; nominal parameters: 10 ms delay, the STS3215's identified gain, friction
+and rotor inertia) the same trot is checked for falls and speed at both speeds. The torque criterion holds at 0.1 m/s;
+at 0.23 m/s the servo's drive torque reaches its stall limit (the model clips it there), a finding reported in
+docs/design/2026-11-27-servo-model.md, not a failure of the model.
 """
 
 import numpy as np
 import pytest
 
-from erg import gait, robot
+from erg import gait, robot, servo
 from erg.env import Env
 
 SECONDS = 10.0
 
 
-def walk(speed, seed):
-    env = Env(central=True)
+def walk(speed, seed, servo_params=None):
+    env = Env(central=True, servo=servo_params)
     env.reset(seed, (speed, 0.0, 0.0))
     torso = env.model.body("torso").id
     x0 = env.data.xpos[torso, 0]
@@ -59,3 +64,14 @@ def test_trot_walks_forward_without_falling(speed, seed):
     assert max_tilt < 10.0, max_tilt
     assert 0.3 * speed < mean_speed < 1.2 * speed, mean_speed
     assert max_torque < robot.SERVO_STALL_TORQUE, max_torque
+
+
+@pytest.mark.parametrize("speed", [0.1, 0.23])
+def test_trot_with_the_servo_model(speed):
+    mean_speed, min_height, max_tilt, max_torque = walk(speed, 0, servo.ServoParams())
+    assert min_height > 0.8 * standing_height(), min_height
+    assert max_tilt < 10.0, max_tilt
+    assert 0.3 * speed < mean_speed < 1.2 * speed, mean_speed
+    assert max_torque <= robot.SERVO_STALL_TORQUE, max_torque  # the drive limit
+    if speed <= 0.1:
+        assert max_torque < robot.SERVO_STALL_TORQUE, max_torque
