@@ -35,6 +35,26 @@ CROUCH = np.array([0.0, 1.3, -2.4] * len(robot.LEGS))  # legs folded under the b
 STAND_UP_SECONDS = 2.0
 
 
+# The redesign's targets (docs/design/2026-11-27-redesign.md): name -> (comparison, limit, unit).
+TARGETS = {
+    "mass": ("<=", 1.2, "kg"),
+    "height_over_half_width": ("<=", 1.5, ""),
+    "tipping_angle_deg": (">=", 34.0, "deg"),
+    "com_offset_x": ("abs<=", 0.005, "m"),
+    "com_offset_y": ("abs<=", 0.005, "m"),
+    "leg_mass_fraction": ("<=", 0.20, ""),
+    "trot_torque_p95": ("<=", 0.5, "of stall torque"),
+    "trot_torque_max": ("<=", 0.8, "of stall torque"),
+    "trot_speed_p95": ("<=", 0.6, "of no-load speed"),
+    "stand_up_torque_max": ("<=", 0.9, "of stall torque"),
+}
+
+
+def meets(name: str, value: float) -> bool:
+    op, limit, _ = TARGETS[name]
+    return {"<=": value <= limit, ">=": value >= limit, "abs<=": abs(value) <= limit}[op]
+
+
 @dataclass
 class Targets:
     mass: float  # kg

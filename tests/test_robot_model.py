@@ -85,3 +85,10 @@ def test_standing_is_deterministic():
     a = stand(1.0)[0].qpos.copy()
     b = stand(1.0)[0].qpos.copy()
     assert np.array_equal(a.view(np.uint64), b.view(np.uint64))
+
+
+def test_model_is_generated_from_the_design():
+    """models/quadruped.xml is what scripts/make_model.py writes from erg/design.py (#59)."""
+    from erg import design
+
+    assert robot.MODEL_PATH.read_text() == design.mjcf()

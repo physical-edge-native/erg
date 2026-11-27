@@ -8,6 +8,10 @@ This module is the single source of the body's numbers until the printed parts a
 same numbers). Every component is a box or a cylinder of known mass at a known place; the inertia of each MuJoCo body
 is summed from them. Masses of parts that are not bought yet are estimates and are marked so.
 
+Collisions: every robot geom touches the floor; thighs, shanks and feet also touch the torso (contype 3 against the
+torso's conaffinity 2), because the wide abduction range used to get up can swing a leg over the body; legs do not
+touch each other, and the shoulder blocks sit next to the torso.
+
 The push-rod knee is modelled as a knee joint with its own actuator, as before. With a parallelogram push rod the knee
 servo, fixed to the shoulder, turns the shank against the shoulder, not against the thigh; driving the knee joint
 directly instead adds the knee's torque to the hip flexion servo in the simulation. The hip torques found here are
@@ -40,7 +44,7 @@ FOOT_RADIUS = 0.012
 STAND_DEPTH = 0.140  # standing: foot centre below the hip flexion shaft
 
 # Joint ranges (rad). Abduction wide enough to roll the body over from its side.
-ABD_RANGE = (-1.6, 1.6)
+ABD_RANGE = (-2.6, 2.6)  # wide enough to push the body over from its back (self-righting, #59)
 FLEX_RANGE = (-1.8, 1.8)
 KNEE_RANGE = (-2.6, -0.2)
 
@@ -164,7 +168,7 @@ def mjcf() -> str:
         f'    <body name="torso" pos="0 0 {torso_z:.4g}">',
         '      <freejoint name="root"/>',
         "      " + _inertial(torso_parts()),
-        f'      <geom name="torso" type="box" pos="0 0 {TORSO_Z}" size="{TORSO_SIZE[0] / 2:.4g} '
+        f'      <geom name="torso" type="box" conaffinity="2" pos="0 0 {TORSO_Z}" size="{TORSO_SIZE[0] / 2:.4g} '
         f'{TORSO_SIZE[1] / 2:.4g} {TORSO_SIZE[2] / 2:.4g}"/>',
     ]
     for leg in LEGS:
@@ -182,12 +186,12 @@ def mjcf() -> str:
             f'        <body name="{leg}_thigh" pos="0 {sy * LEG_OFFSET:.4g} 0">',
             "          " + _inertial(thigh_parts()),
             f'          <joint name="{leg}_hip_flex" class="flex"/>',
-            f'          <geom type="capsule" fromto="0 0 0 0 0 {-THIGH:.4g}" size="0.009"/>',
+            f'          <geom type="capsule" fromto="0 0 0 0 0 {-THIGH:.4g}" size="0.009" contype="3"/>',
             f'          <body name="{leg}_shank" pos="0 0 {-THIGH:.4g}">',
             "            " + _inertial(shank_parts()),
             f'            <joint name="{leg}_knee" class="knee"/>',
-            f'            <geom type="capsule" fromto="0 0 0 0 0 {-(SHANK - FOOT_RADIUS):.4g}" size="0.007"/>',
-            f'            <geom name="{leg}_foot" type="sphere" pos="0 0 {-SHANK:.4g}" size="{FOOT_RADIUS}"/>',
+            f'            <geom type="capsule" fromto="0 0 0 0 0 {-(SHANK - FOOT_RADIUS):.4g}" size="0.007" contype="3"/>',
+            f'            <geom name="{leg}_foot" type="sphere" pos="0 0 {-SHANK:.4g}" size="{FOOT_RADIUS}" contype="3"/>',
             f'            <site name="{leg}_foot" pos="0 0 {-SHANK:.4g}" size="{FOOT_RADIUS + 0.002:.4g}"/>',
             "          </body>",
             "        </body>",
