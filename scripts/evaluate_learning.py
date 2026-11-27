@@ -34,18 +34,20 @@ TORQUE_P95 = 0.5  # L5
 SMOOTH_COMMAND = TORQUE_COMMAND = (0.1, 0.0, 0.0)
 
 
-def load(run_dir: Path) -> ppo.Agent:
-    form = json.loads((run_dir / "run.json").read_text())["config"]["form"]
-    agent = ppo.Agent(form, "base")
+def load(run_dir: Path) -> ppo.PolicyAdjust:
+    """The trained agent of a run, with the hold or ramp of its adjustments it was trained with (#86; runs made
+    before #86 have no "interpolate" in their configuration and held the adjustments)."""
+    config = json.loads((run_dir / "run.json").read_text())["config"]
+    agent = ppo.Agent(config["form"], "base")
     agent.load_state_dict(torch.load(run_dir / "agent.pt"))
-    return agent
+    return ppo.PolicyAdjust(agent, interpolate=bool(config.get("interpolate", False)))
 
 
 def measure(job) -> dict:
     """One 20 s run: job = (run directory or None for the base controller alone, command, seed)."""
     torch.set_num_threads(1)
     run_dir, command, seed = job
-    adjust = ppo.PolicyAdjust(load(Path(run_dir))) if run_dir else None
+    adjust = load(Path(run_dir)) if run_dir else None
     r = bc.run(command, seed=seed, seconds=SECONDS, window=WINDOW, servo=ServoParams(), randomize_servo=True,
                adjust=adjust)
     start = round(WINDOW / bc.DT)

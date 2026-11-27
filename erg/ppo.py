@@ -61,11 +61,15 @@ POLICY_PERIODS = 2  # "base": control periods per policy step (40 ms, 25 Hz)
 CAPS_NOISE = 0.01  # standard deviation of the observation noise of the spatial CAPS term
 
 # Settings that differ between the action mappings; Config fields left at None take these.
+# CAPS weights for "base": temporal 0.1 and spatial 1.0 in the first training of #82 and step 2 of #86; ten times
+# since step 3 of #86.
 DEFAULTS = {
-    "base": {"servo": "random", "rollout": 64, "entropy_coef": 0.0, "init_log_std": -1.6, "caps_temporal": 0.1,
-             "caps_spatial": 1.0, "separate_clip": True},
+    "base": {"servo": "random", "rollout": 64, "entropy_coef": 0.0, "init_log_std": -1.6, "caps_temporal": 1.0,
+             "caps_spatial": 10.0, "separate_clip": True,
+             "interpolate": True},
     "gait": {"servo": "none", "rollout": 128, "entropy_coef": 0.01, "init_log_std": -2.3, "caps_temporal": 0.0,
-             "caps_spatial": 0.0, "separate_clip": False},
+             "caps_spatial": 0.0, "separate_clip": False,
+             "interpolate": False},
 }
 
 
@@ -95,6 +99,9 @@ class Config:
     # Clip the gradient norms of the actor (with its log std) and of the critic separately (#82), so that the
     # critic's large gradients early in training do not shrink the actor's step; "gait": one norm for both.
     separate_clip: bool | None = None
+    # "base": ramp the adjustments linearly from the previous policy step's to the new one over the policy period
+    # (#86); False holds each for the whole period, as in #82's first training.
+    interpolate: bool | None = None
     seed: int = 0
     log: list = field(default_factory=list)
 
@@ -235,10 +242,9 @@ class Worker:
 
     def _step_base(self, action: np.ndarray) -> tuple[float, bool]:
         a = np.clip(np.asarray(action, dtype=np.float64).reshape(N_LEGS, bc.N_ADJUST), -1.0, 1.0)
-        adjs = [bc.adjust_from_action(a[i]) for i in range(N_LEGS)]
         total, n, fell = 0.0, 0, False
-        for _ in range(POLICY_PERIODS):
-            self.control_period(adjs)
+        for p in period_actions(self.prev_actions[0], a, self.cfg.interpolate):
+            self.control_period([bc.adjust_from_action(p[i]) for i in range(N_LEGS)])
             total += sum(rw.walk_terms(self.env.data, self.env.command).values())
             n += 1
             fell = rw.fallen(self.env.data)
@@ -273,6 +279,14 @@ class Worker:
         self.prev_targets = targets
         self.steps += 1
         return r, fell
+
+
+def period_actions(prev: np.ndarray, a: np.ndarray, interpolate: bool) -> list:
+    """The clipped actions applied in each control period of one policy step: `a` throughout (hold), or a linear ramp
+    from the previous policy step's `prev` that reaches `a` exactly in the last period (#86)."""
+    if not interpolate:
+        return [a] * POLICY_PERIODS
+    return [prev + (a - prev) * ((k + 1) / POLICY_PERIODS) for k in range(POLICY_PERIODS - 1)] + [a]
 
 
 def caps_losses(agent: Agent, obs: torch.Tensor, next_obs: torch.Tensor, valid: torch.Tensor,
@@ -417,15 +431,20 @@ def policy_action(agent: Agent, obs: np.ndarray) -> np.ndarray:
 
 class PolicyAdjust:
     """A trained "base" agent as the `adjust` of erg.base_controller.run: every POLICY_PERIODS control periods its
-    mean action on the current observation (per-leg rows or the central observation), held in between."""
+    mean action on the current observation (per-leg rows or the central observation), clipped to [-1, 1] and held or
+    ramped from the previous one over the policy period as in training (period_actions)."""
 
-    def __init__(self, agent: Agent):
+    def __init__(self, agent: Agent, interpolate: bool = True):
         self.agent = agent
-        self.adjs = None
+        self.interpolate = interpolate
+        self.prev = np.zeros((N_LEGS, bc.N_ADJUST))
+        self.plan = []
 
     def __call__(self, k: int, obs: np.ndarray) -> list:
         if k % POLICY_PERIODS == 0:
             x = obs if self.agent.form == "split" else central_obs(obs)
-            a = policy_action(self.agent, x).reshape(N_LEGS, bc.N_ADJUST)
-            self.adjs = [bc.adjust_from_action(a[i]) for i in range(N_LEGS)]
-        return self.adjs
+            a = np.clip(policy_action(self.agent, x).reshape(N_LEGS, bc.N_ADJUST), -1.0, 1.0)
+            self.plan = period_actions(self.prev, a, self.interpolate)
+            self.prev = a
+        p = self.plan[k % POLICY_PERIODS]
+        return [bc.adjust_from_action(p[i]) for i in range(N_LEGS)]

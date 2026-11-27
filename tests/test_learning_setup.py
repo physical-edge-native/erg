@@ -8,6 +8,9 @@ Pass criteria:
 - the reward terms on hand-made cases: tracking terms at their maxima when the torso moves at the command; the
   height term zero at the standing height and -100 * error^2 off it; the posture term sin^2 of a roll; the first and
   second differences of the actions; the CAPS terms are zero for an actor whose output is constant;
+- the adjustments are held over the policy period, or ramped linearly from the previous policy step's and reach
+  the new action exactly in the last control period (#86); a trained policy gives the same joint targets bit for
+  bit in training (erg.ppo.Worker) and in evaluation (erg.ppo.PolicyAdjust), held or ramped;
 - a tiny training run of both forms through scripts/train.py writes its weights, log and timing, and the trained
   agent runs in erg.base_controller.run (checks the pipeline only, not the result).
 """
@@ -66,6 +69,44 @@ def test_action_mapping():
                             att_gain=0.125)
     with pytest.raises(ValueError):
         bc.adjust_from_action(np.zeros(bc.N_ADJUST + 1))
+
+
+def test_period_actions():
+    prev, a = np.full((N_LEGS, bc.N_ADJUST), -0.2), np.full((N_LEGS, bc.N_ADJUST), 0.6)
+    held = ppo.period_actions(prev, a, False)
+    assert len(held) == ppo.POLICY_PERIODS and all(h is a for h in held)
+    ramp = ppo.period_actions(prev, a, True)
+    assert len(ramp) == ppo.POLICY_PERIODS and ramp[-1] is a
+    assert np.allclose(ramp[0], -0.2 + 0.8 / ppo.POLICY_PERIODS)
+    zero = np.zeros((N_LEGS, bc.N_ADJUST))
+    assert all(np.array_equal(bits(p), bits(zero)) for p in ppo.period_actions(zero, zero, True))
+    assert ppo.Config().interpolate is True and ppo.Config(action="gait").interpolate is False
+
+
+@pytest.mark.parametrize("interpolate", [False, True])
+@pytest.mark.parametrize("form", ["split", "central"])
+def test_training_and_evaluation_apply_the_same_adjustments(form, interpolate):
+    agent = ppo.Agent(form)
+    g = torch.Generator().manual_seed(11)
+    with torch.no_grad():
+        agent.actor[-1].weight.normal_(generator=g)
+        agent.actor[-1].weight.mul_(0.05)
+    steps = 25
+    ev = bc.run(COMMAND, seed=5, seconds=steps * ppo.POLICY_PERIODS * bc.DT, window=0.4, servo=ServoParams(),
+                randomize_servo=True, adjust=ppo.PolicyAdjust(agent, interpolate))
+    w = ppo.Worker(ppo.Config(form=form, interpolate=interpolate), 0)
+    w.reset(seed=5, command=COMMAND)
+    for j in range(steps):
+        w.step(ppo.policy_action(agent, w.actor_obs()))
+        assert np.array_equal(bits(w.targets), bits(ev.targets[ppo.POLICY_PERIODS * j + 1]))
+
+
+def test_smoothness_weights_of_step_3():
+    # #86 step 3: ten times the weights of #82's first training (rate 0.05, 0.02; CAPS 0.1, 1.0)
+    assert (reward.WALK_W_RATE, reward.WALK_W_RATE2) == (0.5, 0.2)
+    cfg = ppo.Config()
+    assert (cfg.caps_temporal, cfg.caps_spatial) == (1.0, 10.0)
+    assert (ppo.Config(action="gait").caps_temporal, ppo.Config(action="gait").caps_spatial) == (0.0, 0.0)
 
 
 def test_walk_commands_in_range():
