@@ -23,7 +23,7 @@ with the horn on +z.
 from dataclasses import dataclass
 from math import pi
 
-from build123d import Box, Cylinder, Location, Plane, Pos, Rot, Solid, Sphere
+from build123d import Box, Cylinder, Location, Plane, Pos, Rot, Solid, Sphere, mirror
 
 # --- Feetech STS3215, from the SO-ARM100 CAD model ------------------------------------------------------------------
 SERVO_LENGTH = 45.4  # x
@@ -68,6 +68,21 @@ THIGH_LENGTH = 90.0  # hip flexion shaft to knee shaft
 THIGH_YOKE_RADIUS = THIGH_LENGTH - BASE - WALL - END_CAP_REACH
 SHANK_LENGTH = 90.0  # knee shaft to the centre of the foot
 FOOT_RADIUS = 12.0
+
+# --- Foot switch: Omron SS-5GLD (Issue #53) ---------------------------------------------------------------------------
+# Body size from the Omron SS-5 series datasheet (12.8 x 5.8 x 6.5 mm), to be checked with calipers on a real switch,
+# with a test fit of one printed shank, before printing all four. The switch lies in a pocket inside the foot, its
+# actuator facing the sole; the lever comes out through a slot in the sole, so the switch closes when the foot carries
+# weight. It is slid in from the side of the foot and fixed with a drop of glue; its wires leave through a channel
+# along the shank.
+SWITCH_LENGTH = 12.8  # along the lever
+SWITCH_THICKNESS = 5.8  # across
+SWITCH_HEIGHT = 6.5  # from the back to the actuator face
+SWITCH_CLEARANCE = 0.2  # each side, in the pocket
+SWITCH_MASS = 0.001  # kg, an estimate (to be weighed)
+SOLE_GAP = 2.0  # from the actuator face to the bottom of the foot, for the lever
+LEVER_SLOT_WIDTH = 4.0
+WIRE_CHANNEL = 3.0  # diameter
 
 
 @dataclass
@@ -176,8 +191,8 @@ def thigh_part() -> Part:
 
 
 def shank_part() -> Part:
-    """In the knee yoke frame: arms to a block that joins them, ending in the foot (a sphere) at SHANK_LENGTH.
-    The microswitch is not yet fitted (its part number is not chosen; see docs/design/2026-11-25-parts-list.md)."""
+    """In the knee yoke frame: arms to a block that joins them, ending in the foot (a sphere) at SHANK_LENGTH, with a
+    pocket for the foot switch (Issue #53)."""
     reach = SHANK_LENGTH - FOOT_RADIUS - 6.0
     width = 20.0
     solid = yoke(reach, width, BOSS, base=False)
@@ -185,11 +200,44 @@ def shank_part() -> Part:
     block_len = SHANK_LENGTH - reach
     solid += Pos(reach + block_len / 2, 0, 0) * Box(block_len, width, 2 * outer)
     solid += Pos(SHANK_LENGTH, 0, 0) * Sphere(FOOT_RADIUS)
-    return Part("shank", solid)
+    return Part("shank", solid - switch_pocket())
+
+
+def switch_body() -> Solid:
+    """The switch body in its pocket, in the knee yoke frame (for mass and interference checks)."""
+    top = SHANK_LENGTH + FOOT_RADIUS - SOLE_GAP - SWITCH_CLEARANCE
+    return Pos(top - SWITCH_HEIGHT / 2, 0, 0) * Box(SWITCH_HEIGHT, SWITCH_LENGTH, SWITCH_THICKNESS)
+
+
+def switch_pocket() -> Solid:
+    """The space cut from the foot for the switch, in the knee yoke frame (the sole is at +x): the pocket, open
+    towards +z so that the switch slides in from the side; the lever slot through the sole; the wire channel."""
+    c = SWITCH_CLEARANCE
+    top = SHANK_LENGTH + FOOT_RADIUS - SOLE_GAP  # actuator face
+    h, length, t = SWITCH_HEIGHT + 2 * c, SWITCH_LENGTH + 2 * c, SWITCH_THICKNESS + 2 * c
+    z_open = FOOT_RADIUS + 1.0
+    pocket = Pos(top - h / 2, 0, (z_open - t / 2) / 2) * Box(h, length, z_open + t / 2)
+    slot = Pos(top + SOLE_GAP, 0, 0) * Box(2 * SOLE_GAP + 0.2, length, LEVER_SLOT_WIDTH)
+    reach = 20.0
+    channel = Pos(top - h - reach / 2 + 1.0, 0, 0) * (Rot(0, 90, 0) * Cylinder(WIRE_CHANNEL / 2, reach))
+    return pocket + slot + channel
 
 
 def parts() -> list[Part]:
+    """The printed parts of a left leg, and the stand for the bench."""
     return [stand_part(), hip_part(), thigh_part(), shank_part()]
+
+
+# The right legs are mirror images of the left ones (y -> -y in the leg frame): the hip in its yoke frame is
+# mirrored across its xz plane (the yoke's y is the leg's y), the thigh and shank across their xy plane (their shaft,
+# z, is along the leg's y). The servos need no mirror image: an STS3215 is symmetric across its own xz plane, so its
+# mirror image is the same servo turned half a turn about its long axis, horn and idler swapped.
+MIRROR_PLANES = {"hip": Plane.XZ, "thigh": Plane.XY, "shank": Plane.XY}
+
+
+def right_parts() -> list[Part]:
+    """The printed parts of a right leg."""
+    return [Part(f"{p.name}_right", mirror(p.solid, MIRROR_PLANES[p.name])) for p in parts() if p.name in MIRROR_PLANES]
 
 
 # --- Assembly ---------------------------------------------------------------------------------------------------------
@@ -228,6 +276,7 @@ def leg_solids(abd: float = 0.0, flex: float = 0.0, knee: float = 0.0) -> dict[s
     out = {p.name: loc[p.name] * p.solid for p in parts()}
     for name in ("abd_servo", "flex_servo", "knee_servo"):
         out[name] = loc[name] * servo
+    out["switch"] = loc["shank"] * switch_body()
     return out
 
 
@@ -241,7 +290,7 @@ def foot_position(abd: float = 0.0, flex: float = 0.0, knee: float = 0.0):
 # "thigh" (flexion) the thigh part and the knee servo, "shank" (knee) the shank part. A servo counts as a solid of
 # uniform density over its envelope with SERVO_MASS.
 
-BODY_CONTENTS = {"hip": ("hip", "flex_servo"), "thigh": ("thigh", "knee_servo"), "shank": ("shank",)}
+BODY_CONTENTS = {"hip": ("hip", "flex_servo"), "thigh": ("thigh", "knee_servo"), "shank": ("shank", "switch")}
 # Origin of each MuJoCo body in the leg frame at zero angles (on its joint's axis).
 BODY_ORIGINS = {"hip": (0.0, 0.0, 0.0), "thigh": (0.0, 0.0, -HIP_DROP), "shank": (0.0, 0.0, -HIP_DROP - THIGH_LENGTH)}
 
@@ -255,7 +304,10 @@ def body_inertials() -> dict[str, tuple[float, tuple, tuple]]:
     servo_density = SERVO_MASS / servo_envelope().volume
     out = {}
     for body, names in BODY_CONTENTS.items():
-        items = [(solids[n], servo_density if n.endswith("_servo") else MATERIAL_DENSITY) for n in names]
+        density = {n: servo_density if n.endswith("_servo") else MATERIAL_DENSITY for n in names}
+        if "switch" in density:
+            density["switch"] = SWITCH_MASS / solids["switch"].volume
+        items = [(solids[n], density[n]) for n in names]
         masses = [s.volume * rho for s, rho in items]
         centres = [np.array(tuple(s.center())) for s, _ in items]
         m = sum(masses)
