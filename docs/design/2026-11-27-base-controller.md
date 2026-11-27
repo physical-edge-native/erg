@@ -100,6 +100,75 @@ ring. The tests check the table against Dyne's virtual network ("neighbours"), t
 message or another leg's sensors does not change a leg's output, and that the whole run is the same bit for bit with
 links "all" (where the diagonal leg's message would be readable) as with "neighbours".
 
-## Results
+## Results (2026-11-27)
 
-To be added after the run, with nothing above changed.
+Run with `uv run python scripts/base_controller.py` (five seeds, 20 s, Dyne's wire format) on the controller as
+committed with this section. Nothing in the conditions above was changed after the run.
+
+| # | Condition | Result | Measured (over seeds 0–4) |
+|---|---|---|---|
+| 1 | Forward speed | pass | 0.1 m/s: 0.098–0.101 (0.98–1.01 of the command); 0.2 m/s: 0.195–0.202 (0.98–1.01); 0.3 m/s: 0.280–0.296 (0.93–0.99). Sideways drift ≤ 0.008 m/s, yaw drift ≤ 0.030 rad/s |
+| 2 | Turning | pass | +0.5 rad/s: 0.374–0.376 (0.75); -0.5 rad/s: -0.381 to -0.382 (0.76); (0.15, 0, 0.5): 0.406–0.420 (0.81–0.84), forward 0.155–0.159 |
+| 3 | Sideways | pass | +0.1 m/s: 0.102–0.106 (1.02–1.06); -0.1 m/s: -0.102 to -0.108; yaw drift ≤ 0.020 rad/s |
+| 4 | No falls | pass | no fall in 40 runs; largest tilt 7.5°, lowest torso centre 0.143 m |
+| 5 | Small pushes (0.3 N·s) | pass | no fall in 10 runs; largest tilt 4.9° |
+| 6 | Torque at 0.2 m/s | **fail** | worst joint's 95th percentile 0.72–0.73 of the stall torque (limit 0.5); maximum 0.82–0.90 |
+| 7 | Determinism | pass | the same joint targets bit for bit |
+| 8 | Information rule | pass | `tests/test_base_controller.py` |
+
+Torque at the other commands (worst joint's 95th percentile): 0.34–0.35 at 0.1 m/s, **1.00 at 0.3 m/s** (the servos
+saturate: the speed is tracked, with no margin left), 0.31–0.32 turning on the spot, 0.60–0.62 for (0.15, 0, 0.5),
+0.44–0.46 sideways.
+
+Beyond the conditions (reported, not a condition; `--push-forces`): walking at 0.2 m/s, sideways pushes of 1.0 and
+1.5 N·s gave no falls in 10 runs, 2.0 N·s gave 3 falls in 10, 2.5 N·s and more always fell.
+
+### The failed condition: torque (a result, not loosened)
+
+The hip flexion servo gives most of the torque (at 0.2 m/s, per joint: hip flexion 0.6–0.7, knee about 0.35,
+abduction about 0.1). The model's servo turns its speed into a loss torque (joint damping = stall torque ÷ no-load
+speed = 0.62 N·m·s/rad, a straight torque–speed line), and the swinging hip moves at about 3 rad/s at 0.2 m/s, so
+about 1.9 N·m (0.6 of the stall torque) goes to the servo's own speed at the peak of each swing. This is set by the
+speed of the body, not by the controller's details: changing the swing's speed profile, the retraction, the step
+height, the period (±30 %), the stance fraction (0.45–0.6) and the attitude gain left the 95th percentile between
+0.61 and 0.83 at 0.2 m/s.
+
+The redesign record's target "≤ 0.5 at 0.2 m/s" was measured with the open-loop trot commanded at 0.2 m/s, which
+walks at about 0.1 m/s (0.41 there). Walking at 0.2 m/s with the open-loop trot (commanded 0.35 m/s, reaching
+0.19 m/s) gives 0.69, about what the base controller needs (0.72). So body L1 with this servo model meets the
+torque target at about 0.1–0.15 m/s of actual speed, not at 0.2 m/s.
+
+What I would change, for the maintainer to choose (it changes a body target of the redesign):
+
+1. Run the conditions again with the servo model of #70 when it is merged: the loss torque above comes from the
+   assumed straight torque–speed line of the seller's values, which the servo's identification may change.
+2. Measure the body target at the robot's actual speed, and either accept a lower forward speed for the torque
+   margin (for example 0.5 of the stall torque at 0.12 m/s), or keep 0.2 m/s with less margin.
+3. If neither suffices: a faster servo (more no-load speed at the same stall torque), or a lighter swing (the swing's
+   speed, not its mass, dominates here).
+
+### Found while tuning (choices made with the implementation, to be reviewed)
+
+The first two rows and the attitude estimate change the description of items 3 and 4 under "What it is", which was
+written before the run; the code follows the rows below.
+
+| Point | Choice | Reason |
+|---|---|---|
+| Speed feedback | An integral of the speed error (1 /s, bounded to ±0.15 m/s) added to the stance speed; no proportional term | With the model's soft servos (stiffness 10 N·m/rad) the open-loop stride covers about 0.6–0.7 of its length; the integral makes up the rest. A proportional term of 0.3 gave no better tracking and a little more torque; the first try, a proportional term of 1 with an integral of 2 /s, fell at 0.2 and 0.3 m/s |
+| Velocity estimate and integral shared with the neighbours | Each period, a leg averages its estimate and its integral with its neighbours' (from their messages), then corrects the estimate by its own stance measurement | With a separate integral per leg, the left legs' and right legs' sideways integrals ran to opposite limits (±0.1 m/s), the legs pushed against each other, and the abduction torque rose from 0.06 to 0.25 of the stall torque. Averaging on the ring keeps them equal |
+| Message contents | The four values erg.env reserves for learned values carry the velocity estimate (2) and the speed integral (2) | No other room in the message. When a policy sends learned values, the message needs more values (erg's own wire layout, `crates/erg-links`); to be decided with that work |
+| Attitude estimate | Gyroscope integrated, pulled towards the accelerometer's gravity direction with a 1 s time constant, only when the reading is within ±20 % of g² | With 0.3 s and no gating the estimate was off by 0.1–0.2 rad while trotting (impacts and sway); with a gain of 1 the robot then fell at 0.2–0.3 m/s |
+| Attitude gain | 0.5 of the hip's height error | 1 raised the torque and tilt; with 0.5, stepping in place under a steady torque of 0.4 N·m on the torso, the steady roll falls from 0.030 to 0.001 rad and the pitch from 0.034 to 0.011 rad |
+| Turning | The stance feet's motion for the commanded turning speed, plus 0.5 times its error read on the leg's gyroscope | Without the gyroscope term the robot turned at 0.72 of the command; with it 0.75–0.76. The rest is lost to the feet slipping, which a policy may correct |
+| Swing | Speed rising over the first quarter and falling over the last quarter of the forward move (peak 1.33 times the mean, against 1.57 for a half cosine); step height 12 mm as the hand-made trot; retraction 3 mm over the last fifth | Meant to ask less peak speed of the servos; in the torque it made little difference against a half cosine (within 0.02 of the stall torque). 6 mm of retraction cost about 0.02 more than 3 mm |
+| Phase coupling | 0.5 of the frequency correction per unit of the sine of the phase error, summed over both neighbours; a neighbour's phase advanced by the age of its message | Clocks started at (0, 0.3, 0.1, 0.6) reach the trot within 5 s (test). Clocks started all equal stay equal: that state is a balance point of the coupling, but not a stable one; with the trot offsets of erg.env at reset it is not reached |
+
+## Limits
+
+- Simulation only, with the model's position actuators, not the servo model of #70; flat ground; no delay or loss
+  in the virtual network beyond one control period.
+- The velocity estimate assumes the stance foot does not slip.
+- No stumble or early and late touch-down reflexes yet (redesign record, item 1); they come with steps and slopes
+  (tier T2).
+- The controller is written to be ported bit for bit (erg.exactmath, square roots, plain operations) but is not
+  yet in the firmware; the bit-exact check against C comes with that port.
