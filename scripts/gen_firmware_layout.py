@@ -57,6 +57,7 @@ def text() -> str:
     lines.append(f"#define GAIT_PERIOD {gait.PERIOD!r}")
     lines.append(f"#define GAIT_STEP_HEIGHT {gait.STEP_HEIGHT!r}")
     lines.append(f"#define GAIT_STAND_DEPTH {float(gait.STAND_DEPTH)!r}")
+    lines.append(f"#define GAIT_FOOT_X {float(gait.FOOT_X)!r}")
     lines.append(f"#define GAIT_THIGH {gait.THIGH!r}")
     lines.append(f"#define GAIT_SHANK {gait.SHANK!r}")
     lines.append(f"#define GAIT_THIGH_SQ {gait.THIGH * gait.THIGH!r}")
