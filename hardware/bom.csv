@@ -18,9 +18,9 @@ stage,part,role,quantity,spare,reference_price,currency,tax_included,source,seco
 2,G-FORCE Noir 3S 11.1 V 1300 mAh LiPo battery (GFG910; 86 x 30 x 17 mm; 99 g; mini connector),battery,2,no,3780,JPY,yes,https://joshinweb.jp/game/59360/4580416509107.html,https://hobbyking.com/jp_jp/turnigy-1300mah-3s-30c-lipo-pack.html,2026-11-27
 2,"G-FORCE G3 DUO AC charger, 2-3 cell LiPo, two packs at once (G0318)",charger,1,no,5580,JPY,yes,https://joshinweb.jp/game/27501/4580416433181.html,https://hobbyking.com/turnigy-12v-2-3s-basic-balance-charger.html,2026-11-27
 2,Small parts: M2 self-tapping screws; wires; XT60 and JST connectors; battery adapter from the mini connector to XT60 (estimate),small_parts,1,no,3000,JPY,yes,,,2026-11-25
-1,"Push rod parts for the knee: M2 threaded rod, two M2 ball links or rod ends per leg (estimate)",small_parts,1,no,1500,JPY,yes,,,2026-11-27
+1,"Push rod parts for the knee: 4 x 3 mm carbon-fibre tube (about 100 mm per leg), two M2 ball links per leg, M2 screws (estimate)",small_parts,1,no,2000,JPY,yes,,,2026-11-27
 1,"Foot caps: silicone or rubber caps over the 12 mm foot sphere, a pack (estimate; or printed in TPU)",small_parts,1,no,800,JPY,yes,,,2026-11-27
-2,"Push rod parts for the knee: M2 threaded rod, two M2 ball links or rod ends per leg (estimate)",small_parts,1,no,1500,JPY,yes,,,2026-11-27
+2,"Push rod parts for the knee: 4 x 3 mm carbon-fibre tube (about 100 mm per leg), two M2 ball links per leg, M2 screws (estimate)",small_parts,1,no,2000,JPY,yes,,,2026-11-27
 2,"Foot caps: silicone or rubber caps over the 12 mm foot sphere, a pack (estimate; or printed in TPU)",small_parts,1,no,800,JPY,yes,,,2026-11-27
 option,"Round force-sensitive resistor, 0.3-10 N (Alpha MF01A-N-221-A01; foot force, optional)",foot_force,4,no,3.95,USD,no,https://www.adafruit.com/product/166,https://www.interlinkelectronics.com/products/fsr-model-402,2026-11-27
 option,"Round force-sensitive resistor, 0.3-10 N (Alpha MF01A-N-221-A01; foot force, optional)",foot_force,2,yes,3.95,USD,no,https://www.adafruit.com/product/166,https://www.interlinkelectronics.com/products/fsr-model-402,2026-11-27

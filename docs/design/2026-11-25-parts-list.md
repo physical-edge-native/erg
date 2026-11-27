@@ -38,7 +38,7 @@ ordered before this revision. The rows of the 2026-11-25 table above that name t
 | Bench power supply | Unchanged, set to 12 V with its current limit | It reaches 30 V |
 | Microcontroller supply | Unchanged (Pololu D24V10F5, 5.1-36 V in) | Works over the 3-cell range |
 | Servo bus adapter | Unchanged (Waveshare Bus Servo Adapter (A)) | Labelled for 9-12.6 V, the ST series' voltage |
-| Push rods | M2 threaded rod and two ball links or rod ends per leg (estimate, one lot per stage) | The knee is driven by a push rod in body L1 |
+| Push rods | A 4 × 3 mm carbon-fibre tube and two M2 ball links per leg (estimate, one lot per stage) | The knee is driven by a push rod in body L1. At the servo's stall torque the rod carries hundreds of newtons; a printed rod or a bare M2 threaded rod would buckle, so a tube is used with a longer crank (maintainer, 2026-11-27; #72) |
 | Foot caps | Rubber or silicone caps over the 12 mm foot sphere (estimate), or printed in TPU | Grip and some impact absorption; which one follows the test print |
 | Foot force sensors (optional, stage `option`) | Round force-sensitive resistors, 0.3-10 N (Alpha MF01A-N-221-A01), 4 plus 2 spares | The chosen tier lists foot force sensors; the foot switch already gives contact, so they are bought only if the maintainer decides to. **Not bought now (maintainer, 2026-11-27).** Not counted by the tests |
 
@@ -59,8 +59,8 @@ Ordering is planned for about 2026-12-01 (maintainer, 2026-11-27; Issue #69). Pr
 - `small_parts` rows (screws, wires, connectors) are estimates without a shop. The servos come with horn screws
   and an accessory kit; M2 self-tapping screws for the frame are bought only if the kit has too few.
 
-Totals at the reference prices, without shipping (revised 2026-11-27): stage 1 about ¥19,100 plus about $141; stage 2
-about ¥23,400 plus about $291. Both stages: about ¥42,500 plus about $431, about ¥107,000 at about ¥150 per US dollar
+Totals at the reference prices, without shipping (revised 2026-11-27): stage 1 about ¥19,600 plus about $141; stage 2
+about ¥23,900 plus about $291. Both stages: about ¥43,500 plus about $431, about ¥108,000 at about ¥150 per US dollar
 (the redesign's estimate for the chosen tier was ¥105,000-125,000). The optional foot force sensors add about $24.
 Before the revision (7.4 V servos): about ¥94,000. The bench power
 supply is bought in Japan (maintainer's choice, 2026-11-25); its price is an estimate from listings of similar
