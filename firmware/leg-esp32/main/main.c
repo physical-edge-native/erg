@@ -6,7 +6,9 @@
  * observation in the order of the training environment (leg.c, obs_layout.h), runs the policy in Dyne's mlp-actor
  * (policy.c) and sends the three joint goals in one packet: the base gait at the leg's gait phase plus the policy's
  * corrections; then it advances the leg's gait clock by the policy's frequency correction. Without a policy the
- * corrections are zero and the leg follows the base gait (stepping in place for a zero command).
+ * corrections are zero and the leg follows the base gait (stepping in place for a zero command). After reading the
+ * servos it sets the knee servo's torque limit from the measured knee angle (leg_knee_torque_limit, Issue #81), so
+ * that the push rod's force stays under its allowable load near the straight end of the knee range.
  *
  * It prints, every REPORT_LOOPS loops, the time of each stage (servo bus, IMU, policy, goals) and of the whole loop,
  * and the jitter of the loop's start against its schedule, as "timing" lines for the design record.
@@ -106,6 +108,23 @@ static int servo_read_state(uint8_t id, sts_state_t *s)
     int got = uart_read_bytes(SERVO_UART, rep, 12, pdMS_TO_TICKS(SERVO_REPLY_TIMEOUT_MS));
     if (got <= 0) return -10;
     return sts_parse_state(rep, (size_t)got, id, s);
+}
+
+/* The knee servo's torque limit register (one broadcast packet, no reply), written only when the limit changes
+ * (leg_knee_limit_should_write). Returns 1 if it wrote. */
+static int s_knee_limit = -1;
+
+static int servo_knee_limit(double knee)
+{
+    int v = leg_knee_limit_register(knee);
+    if (!leg_knee_limit_should_write(s_knee_limit, v)) return 0;
+    uint8_t pkt[16];
+    uint16_t value = (uint16_t)v;
+    size_t n = sts_sync_write_u16(pkt, sizeof pkt, STS_ADDR_TORQUE_LIMIT, &SERVO_IDS[2], &value, 1);
+    uart_write_bytes(SERVO_UART, pkt, n);
+    uart_wait_tx_done(SERVO_UART, pdMS_TO_TICKS(2));
+    s_knee_limit = v;
+    return 1;
 }
 
 static void servo_write_goals(const uint16_t goals[ACT_JOINTS])
@@ -222,7 +241,7 @@ void app_main(void)
     int16_t acc_raw[3] = {0}, gyro_raw[3] = {0};
     double acc[3], gyro[3];
     stat_t st_bus = {0}, st_imu = {0}, st_pol = {0}, st_goal = {0}, st_loop = {0}, st_jit = {0};
-    int bus_errors = 0, imu_errors = 0, loops = 0;
+    int bus_errors = 0, imu_errors = 0, loops = 0, knee_writes = 0;
 
     int64_t next = esp_timer_get_time() + CONTROL_PERIOD_US;
     for (;;) {
@@ -234,9 +253,15 @@ void app_main(void)
         stat_add(&st_jit, t0 - next);
         next += CONTROL_PERIOD_US;
 
+        bool knee_ok = true;
         for (int j = 0; j < ACT_JOINTS; j++) {
-            if (servo_read_state(SERVO_IDS[j], &servo[j]) != 0) bus_errors++;
+            if (servo_read_state(SERVO_IDS[j], &servo[j]) != 0) {
+                bus_errors++;
+                if (j == 2) knee_ok = false;
+            }
         }
+        /* the knee's torque limit from the measured knee angle (erg.knee_limit), before the new goals */
+        if (knee_ok) knee_writes += servo_knee_limit(leg_joint_angle(&s_cal[2], servo[2].position));
         int64_t t1 = esp_timer_get_time();
         if (!imu_ok || !imu_read(acc_raw, gyro_raw)) imu_errors++;
         leg_imu(&s_mount, acc_raw, gyro_raw, acc, gyro);
@@ -260,13 +285,13 @@ void app_main(void)
         if (++loops == REPORT_LOOPS) {
             printf("timing (us, mean/max over %d loops): servo read %" PRId64 "/%" PRId64 ", imu+obs %" PRId64
                    "/%" PRId64 ", policy %" PRId64 "/%" PRId64 ", goals %" PRId64 "/%" PRId64 ", loop %" PRId64
-                   "/%" PRId64 ", start jitter %" PRId64 "/%" PRId64 "; bus errors %d, imu errors %d\n",
+                   "/%" PRId64 ", start jitter %" PRId64 "/%" PRId64 "; bus errors %d, imu errors %d, knee limit writes %d\n",
                    loops, st_bus.sum / loops, st_bus.max, st_imu.sum / loops, st_imu.max, st_pol.sum / loops,
                    st_pol.max, st_goal.sum / loops, st_goal.max, st_loop.sum / loops, st_loop.max,
-                   st_jit.sum / loops, st_jit.max, bus_errors, imu_errors);
+                   st_jit.sum / loops, st_jit.max, bus_errors, imu_errors, knee_writes);
             memset(&st_bus, 0, sizeof st_bus);
             st_imu = st_pol = st_goal = st_loop = st_jit = st_bus;
-            bus_errors = imu_errors = loops = 0;
+            bus_errors = imu_errors = loops = knee_writes = 0;
         }
     }
 }

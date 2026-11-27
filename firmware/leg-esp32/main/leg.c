@@ -104,3 +104,25 @@ void leg_targets(const double action[ACT_SIZE_ALL], double phase, double forward
     leg_base(phase, forward * GAIT_PERIOD / 2, base);
     for (int j = 0; j < ACT_JOINTS; j++) targets[j] = base[j] + ACTION_SCALE * action[j];
 }
+
+/* erg.knee_limit.torque_limit, operation for operation (Issue #81). */
+double leg_knee_torque_limit(double knee)
+{
+    double s, c;
+    xm_sincos(knee + KNEE_CRANK_PHASE, &s, &c);
+    double a = KNEE_LIMIT_ARM * fabs(s);
+    return a > KNEE_LIMIT_STALL ? KNEE_LIMIT_STALL : a;
+}
+
+int leg_knee_limit_register(double knee)
+{
+    double v = floor(leg_knee_torque_limit(knee) / KNEE_LIMIT_STALL * 1000.0);
+    if (v < 0.0) v = 0.0;
+    if (v > KNEE_LIMIT_FULL) v = KNEE_LIMIT_FULL;
+    return (int)v;
+}
+
+bool leg_knee_limit_should_write(int last, int value)
+{
+    return last < 0 || value < last || value >= last + KNEE_LIMIT_STEP || (value == KNEE_LIMIT_FULL && last != value);
+}

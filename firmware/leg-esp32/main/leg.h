@@ -57,3 +57,11 @@ void leg_observation(double obs[OBS_SIZE], const leg_joint_cal_t cal[ACT_JOINTS]
 /* Joint targets (erg.ppo.Worker.step): the base gait at the phase, with the stride of the commanded forward speed,
  * + ACTION_SCALE * the policy's first ACT_JOINTS outputs. */
 void leg_targets(const double action[ACT_SIZE_ALL], double phase, double forward, double targets[ACT_JOINTS]);
+
+/* Knee torque limit near the straight end of the knee range (erg.knee_limit, Issue #81): the limit (N*m) at a knee
+ * angle (rad), the torque limit register's value (tenths of a percent of the maximum torque, rounded down), and
+ * whether to write a new value over the last one written (-1: none yet): at once when it lowers the limit, when it
+ * raises it by KNEE_LIMIT_STEP or more, and when it returns to full. */
+double leg_knee_torque_limit(double knee);
+int leg_knee_limit_register(double knee);
+bool leg_knee_limit_should_write(int last, int value);

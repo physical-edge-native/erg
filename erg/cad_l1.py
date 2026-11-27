@@ -2,8 +2,8 @@
 
 This first CAD of the redesign fixes **where every part is and how much space it takes**, so that the body can be
 checked for collisions over the joint ranges and its printed masses estimated before anything is ordered. It is not
-yet print-ready: screw holes, bearing pins, the push rod's ball joints and the switch pocket are drawn in the
-following step, after a test print of one leg (the first body's detailed parts, removed in #59, are in the git history: erg/frame.py and erg/torso.py).
+yet print-ready: screw holes, bearing pins, the push rod's ball joints and the switch pocket are drawn on these
+placements in erg/cad_leg.py (Issue #72, one leg for a test print).
 
 Parts, for the front-left leg (the others are mirror images), all PLA at full infill:
 
@@ -24,7 +24,7 @@ from math import degrees
 
 from build123d import Box, Cylinder, Location, Plane, Pos, Rot, Solid, mirror
 
-from erg import design
+from erg import design, knee_limit
 
 MM = 1000.0
 SERVO = (45.2, 24.7, 31.8)  # body length (x), width (y), height between the faces (z), in the servo's frame
@@ -42,7 +42,7 @@ THIGH, SHANK = design.THIGH * MM, design.SHANK * MM
 KNEE_DOWN = design.KNEE_SERVO_DOWN * MM
 SHAFT = design.SERVO_SHAFT * MM
 FOOT_R = design.FOOT_RADIUS * MM
-CRANK = 12.0  # crank radius, both ends of the parallelogram
+CRANK = knee_limit.CRANK * MM  # crank radius, both ends of the parallelogram (18 mm; erg/knee_limit.py)
 
 
 def servo() -> Solid:

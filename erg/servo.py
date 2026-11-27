@@ -8,7 +8,9 @@ The model of one joint, evaluated before each MuJoCo step of `timestep` seconds:
 1. Delay: the commanded position reaches the servo's control loop `delay` seconds later, rounded to whole simulation
    steps (a ring buffer). A delay of 50 ms is two and a half control periods of 20 ms.
 2. Position loop (proportional-derivative): u = kp * (target - q) - kd * dq.
-3. Drive limit: u is clipped to +-stall_torque (the motor voltage saturates).
+3. Drive limit: u is clipped to +-stall_torque (the motor voltage saturates); on the knees, also to the knee torque
+   limit at the current knee angle (erg/knee_limit.py, Issue #81), which the leg firmware writes to the knee servo's
+   torque limit register so that the push rod's force stays under its allowable load.
 4. Back electromotive force: the motor's torque falls by (stall_torque / no_load_speed) * dq. MuJoCo applies it as
    the joint's damping, integrated implicitly (stable at 2 ms steps).
 5. Friction: Coulomb friction (MuJoCo's frictionloss) and the rotor's reflected inertia (armature) on the joint.
@@ -31,7 +33,7 @@ from dataclasses import dataclass, replace
 import mujoco
 import numpy as np
 
-from erg import design
+from erg import design, knee_limit
 
 
 @dataclass(frozen=True)
@@ -62,6 +64,8 @@ class ServoParams:
     # kp, kd and friction each multiplied by a factor drawn uniformly in [1 - gain_spread, 1 + gain_spread].
     delay_range: tuple[float, float] = (0.0, 0.040)  # s
     gain_spread: float = 0.2
+    # The knee torque limit near the straight end of the knee range (erg/knee_limit.py), as the leg firmware sets it.
+    knee_limit: bool = True
 
     @classmethod
     def position_actuator(cls) -> "ServoParams":
@@ -69,7 +73,7 @@ class ServoParams:
         # the model's joint damping is stall / no-load speed written with 4 significant digits (erg/design.py)
         damping = float(f"{design.SERVO_STALL_TORQUE / design.SERVO_NO_LOAD_SPEED:.4g}")
         return cls(delay=0.0, kp=10.0, kd=0.0, damping=damping, friction=0.05, armature=0.01, delay_range=(0.0, 0.0),
-                   gain_spread=0.0)
+                   gain_spread=0.0, knee_limit=False)
 
 
 def back_emf(p: ServoParams) -> float:
@@ -100,6 +104,8 @@ class Servo:
         joints = model.actuator_trnid[:, 0]
         self.qadr = model.jnt_qposadr[joints].copy()
         self.dadr = model.jnt_dofadr[joints].copy()
+        names = [mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, i) for i in range(model.nu)]
+        self.knees = np.array([i for i, n in enumerate(names) if n.endswith("_knee")], dtype=int)
         nu = model.nu
         model.actuator_dyntype[:] = mujoco.mjtDyn.mjDYN_NONE
         model.actuator_gaintype[:] = mujoco.mjtGain.mjGAIN_FIXED
@@ -169,6 +175,13 @@ class Servo:
         # ServoParams.position_actuator() gives the same bits.
         u = self.p.kp * self.delayed + ((-self.p.kp) * q + (-self.p.kd) * dq)
         u = np.clip(u, -self.p.stall_torque, self.p.stall_torque)
+        if self.p.knee_limit:
+            lo, hi = knee_limit.FULL_BAND
+            for i in self.knees:
+                qi = float(q[i])
+                if not lo < qi < hi:  # inside the band the limit is the stall torque: skip the sine
+                    t = knee_limit.torque_limit(qi)
+                    u[i] = min(max(u[i], -t), t)
         data.ctrl[:] = u
         return u
 
