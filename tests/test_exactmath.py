@@ -32,7 +32,7 @@ def test_atan2_acos():
 def test_gait_targets_match_the_library():
     def library(s, stride):
         x, z = gait.foot_path(s, stride)
-        x = -stride / 2 + stride * ((s - 0.5) / 0.5) if s >= 0.5 else x
+        x = -stride / 2 + stride * ((s - 0.5) / 0.5) + gait.FOOT_X if s >= 0.5 else x
         z = -gait.STAND_DEPTH + gait.STEP_HEIGHT * math.sin(math.pi * (s - 0.5) / 0.5) if s >= 0.5 else z
         r2 = x * x + z * z
         cc = (r2 - gait.THIGH**2 - gait.SHANK**2) / (2 * gait.THIGH * gait.SHANK)

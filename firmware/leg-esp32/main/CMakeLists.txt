@@ -4,7 +4,7 @@ if(CONFIG_ERG_EMBED_POLICY)
     set(embed "embed/mlp_actor.wasm" "embed/policy.dynm" "embed/check.bin")
 endif()
 idf_component_register(
-    SRCS "main.c" "sts.c" "leg.c" "xmath.c" "policy.c"
+    SRCS "main.c" "sts.c" "leg.c" "xmath.c" "policy.c" "base_ctrl.c"
     INCLUDE_DIRS "."
     EMBED_FILES ${embed}
     PRIV_REQUIRES esp_driver_uart esp_driver_i2c esp_driver_gpio esp_timer

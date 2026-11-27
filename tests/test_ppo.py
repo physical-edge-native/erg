@@ -1,9 +1,11 @@
 """PPO training (Issue #42).
 
 Pass criteria:
-- the actor sizes are under the 8,192-parameter limit of Dyne's full mlp-actor (6,008 per leg, 6,784 central since #51);
-- for both forms, a very short training (1,024 environment steps, 2 environments) run twice with the same seed
-  gives the same weights bit for bit, and a different seed gives different weights; every logged loss is finite;
+- the actor sizes are under the 8,192-parameter limit of Dyne's full mlp-actor (on the base controller since #82:
+  5,910 per leg, 7,176 central; with the base gait's joint corrections of #51: 6,008 per leg, 6,784 central);
+- for both forms and both action mappings, a very short training (1,024 environment steps, 2 environments) run
+  twice with the same seed gives the same weights bit for bit, and a different seed gives different weights; every
+  logged loss is finite;
 - the reward rewards tracking: standing still scores higher with a zero command than with a forward command;
   the air-time reward (#49) is zero when no foot touches down or standing still is commanded, positive for a long
   step and negative for a very short one while moving is commanded; the command curriculum grows from
@@ -23,28 +25,31 @@ from erg.env import Env
 STEPS = 1024
 
 
-def run(form, seed):
-    cfg = ppo.Config(form=form, n_envs=2, rollout=64, seed=seed)
+def run(form, seed, action="base"):
+    cfg = ppo.Config(form=form, action=action, n_envs=2, rollout=64 if action == "gait" else 32, seed=seed)
     agent, timing = ppo.train(cfg, STEPS)
     weights = torch.cat([p.detach().flatten() for p in agent.parameters()]).numpy().copy()
     return weights, cfg.log, timing
 
 
 def test_actor_sizes_fit_dyne():
-    assert ppo.n_params(ppo.Agent("split").actor) == 6008  # 5,575 before #51
-    assert ppo.n_params(ppo.Agent("central").actor) == 6784  # 6,204 before #51
-    assert all(ppo.n_params(ppo.Agent(f).actor) <= 8192 for f in ("split", "central"))
+    assert ppo.n_params(ppo.Agent("split").actor) == 5910  # #82
+    assert ppo.n_params(ppo.Agent("central").actor) == 7176
+    assert ppo.n_params(ppo.Agent("split", "gait").actor) == 6008  # 5,575 before #51
+    assert ppo.n_params(ppo.Agent("central", "gait").actor) == 6784  # 6,204 before #51
+    assert all(ppo.n_params(ppo.Agent(f, m).actor) <= 8192 for f in ("split", "central") for m in ("base", "gait"))
 
 
+@pytest.mark.parametrize("action", ["base", "gait"])
 @pytest.mark.parametrize("form", ["split", "central"])
-def test_training_is_deterministic(form):
-    a, log_a, timing = run(form, 3)
-    b, _, _ = run(form, 3)
-    c, _, _ = run(form, 4)
+def test_training_is_deterministic(form, action):
+    a, log_a, timing = run(form, 3, action)
+    b, _, _ = run(form, 3, action)
+    c, _, _ = run(form, 4, action)
     assert np.array_equal(a.view(np.uint64), b.view(np.uint64))
     assert not np.array_equal(a, c)
     assert all(np.isfinite(e["policy_loss"]) and np.isfinite(e["value_loss"]) for e in log_a)
-    print(f"\n{form}: {timing['env_seconds_per_step'] * 1e6:.0f} us per environment step, "
+    print(f"\n{form}, {action}: {timing['env_seconds_per_step'] * 1e6:.0f} us per environment step, "
           f"{timing['update_seconds_per_step'] * 1e6:.0f} us of training update per step")
 
 
@@ -74,7 +79,7 @@ def test_air_time_reward():
 
 
 def test_command_curriculum():
-    cfg = ppo.Config(form="central", n_envs=2, rollout=32, seed=5)
+    cfg = ppo.Config(form="central", action="gait", n_envs=2, rollout=32, seed=5)
     ppo.train(cfg, 640)
     scales = [e["command_scale"] for e in cfg.log]
     assert scales[0] == ppo.CURRICULUM_START
