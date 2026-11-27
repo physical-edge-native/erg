@@ -40,6 +40,11 @@ IMU, foot contact) and gait phase (18 per leg, in the order of robot.LEGS) follo
 leg identifier. It has the same four independent gait clocks.
 Its action is the 12 target angles in the order of robot.JOINT_NAMES. Only the controller differs between the modes:
 the same joint commands give the same physical state bit for bit.
+
+Servo model (Issue #70), optional: with `servo` set, the joint targets go through erg.servo (command delay,
+proportional-derivative loop, torque limit falling with speed, friction) at every simulation step instead of the
+model's position actuators; with `randomize_servo`, its delay, gains and friction are drawn at each reset from the
+reset seed. Without it the environment is unchanged.
 """
 
 import mujoco
@@ -47,6 +52,7 @@ import numpy as np
 
 from erg import links as links_mod
 from erg import exactmath, gait, robot
+from erg import servo as servo_mod
 
 N_LEGS = len(robot.LEGS)
 SENSOR_SIZE = 3 + 3 + 3 + 3 + 3 + 1  # one leg's own sensor values
@@ -91,13 +97,16 @@ def draw_command(rng: np.random.Generator) -> np.ndarray:
 
 class Env:
     def __init__(self, central: bool = False, links: str = "neighbours", loss: float = 0.0, lat_us: int = 0,
-                 jitter_us: int = 0, wire: bool = True):
+                 jitter_us: int = 0, wire: bool = True, servo: "servo_mod.ServoParams | None" = None,
+                 randomize_servo: bool = False):
         """central=False: one controller per leg (observations (4, OBS_SIZE), actions (4, 3) or (4, 3 + LEARNED)),
         with messages between legs as set by `links` ("none", "neighbours", "all"), `loss`, `lat_us` and
         `jitter_us` (Dyne's virtual network; its seed is the reset seed). wire=True encodes and decodes every
         message in Dyne's wire format; wire=False passes the values directly, which is faster for training and
         gives the same observations bit for bit (tests/test_env_messages.py checks it).
-        central=True: one policy for the whole body (observation (CENTRAL_OBS_SIZE,), action (12,)), no messages."""
+        central=True: one policy for the whole body (observation (CENTRAL_OBS_SIZE,), action (12,)), no messages.
+        servo: parameters of erg.servo's servo model (None: the model's position actuators); randomize_servo: draw
+        the servo's delay, gains and friction at each reset from the reset seed."""
         self.central = central
         self.net_setting = (links, loss, lat_us, jitter_us)
         self.network = None if central else links_mod.Network(links, loss, lat_us, jitter_us)
@@ -109,6 +118,10 @@ class Env:
         self._vals = np.zeros((N_LEGS, N_LEGS, MSG_VALUES))  # newest values received, [receiver, sender]
         self._sent = np.full((N_LEGS, N_LEGS), -1, dtype=np.int64)  # step at which they were sent; -1: none
         self.model = robot.load()
+        self._lo = self.model.actuator_ctrlrange[:, 0].reshape(N_LEGS, ACT_SIZE)
+        self._hi = self.model.actuator_ctrlrange[:, 1].reshape(N_LEGS, ACT_SIZE)
+        self.servo = servo_mod.Servo(self.model, servo) if servo is not None else None
+        self.randomize_servo = randomize_servo
         self.data = mujoco.MjData(self.model)
         self.substeps = round(robot.CONTROL_PERIOD / self.model.opt.timestep)
         self.command = np.zeros(3)
@@ -120,8 +133,6 @@ class Env:
                 )
             for kind in ("acc", "gyro", "touch"):
                 self._sensor[leg, kind] = self._slice(f"{leg}_{kind}")
-        self._lo = self.model.actuator_ctrlrange[:, 0].reshape(N_LEGS, ACT_SIZE)
-        self._hi = self.model.actuator_ctrlrange[:, 1].reshape(N_LEGS, ACT_SIZE)
 
     def _slice(self, name):
         s = self.model.sensor(name)
@@ -135,6 +146,10 @@ class Env:
         self.data.qpos[7:] += rng.uniform(-RESET_JOINT_NOISE, RESET_JOINT_NOISE, size=robot.STAND.size)
         mujoco.mj_forward(self.model, self.data)
         drawn = draw_command(rng)
+        if self.servo is not None:  # its own stream from the same seed, so the draws above do not change
+            srng = np.random.Generator(np.random.PCG64([seed, 70])) if self.randomize_servo else None
+            self.servo.reset(self.data, robot.STAND, srng)
+            mujoco.mj_forward(self.model, self.data)
         self.command = drawn if command is None else np.asarray(command, dtype=np.float64).copy()
         self.step_count = 0
         self.learned[:] = 0.0
@@ -159,9 +174,16 @@ class Env:
         elif not self.central:
             self.learned = np.zeros((N_LEGS, LEARNED))
         targets = np.clip(a.reshape(N_LEGS, ACT_SIZE), self._lo, self._hi)
-        self.data.ctrl[:] = targets.ravel()
-        for _ in range(self.substeps):
-            mujoco.mj_step(self.model, self.data)
+        if self.servo is None:
+            self.data.ctrl[:] = targets.ravel()
+            for _ in range(self.substeps):
+                mujoco.mj_step(self.model, self.data)
+        else:
+            self.servo.command(targets.ravel())
+            for _ in range(self.substeps):
+                self.servo.apply(self.data)
+                mujoco.mj_step(self.model, self.data)
+            self.servo.refresh(self.data)  # the load sensors read the torque for the state reached
         # mj_step computes the sensors before it integrates; recompute them for the state reached.
         mujoco.mj_forward(self.model, self.data)
         self.step_count += 1

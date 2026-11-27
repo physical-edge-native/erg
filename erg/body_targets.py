@@ -19,6 +19,10 @@ ordered. This module computes them for any model that follows erg's names (robot
   the side is added with the new body (Issue #59).
 
 All quantities are deterministic: the simulation starts from the standing posture with no noise.
+
+With a servo model (erg.servo, Issue #70) the joints follow their targets through it (delay, proportional-derivative
+loop, torque limit falling with speed, friction) instead of the model's position actuators; the joint torque is then
+the servo's drive torque, which the same stall torque limits.
 """
 
 from dataclasses import dataclass
@@ -27,6 +31,7 @@ import mujoco
 import numpy as np
 
 from erg import gait, robot
+from erg import servo as servo_mod
 
 SETTLE_STEPS = 500  # 1 s at 2 ms, standing still, before measuring the standing posture
 TROT_SPEED = 0.2  # m/s, forward
@@ -74,16 +79,38 @@ class Targets:
     stand_up_torque_max: float
 
 
-def _settle(m, d, targets, steps):
-    for _ in range(steps):
-        d.ctrl[:] = targets
-        mujoco.mj_step(m, d)
-
-
-def standing(m: mujoco.MjModel) -> dict:
+def _start(m, sv, targets=None):
+    """New data in the standing posture (or with the joints at `targets`), the servo model (if any) holding it."""
     d = mujoco.MjData(m)
     robot.reset_standing(m, d)
-    _settle(m, d, robot.STAND, SETTLE_STEPS)
+    if targets is not None:
+        d.qpos[2] = 0.12
+        d.qpos[7:] = targets
+        d.ctrl[:] = targets
+        mujoco.mj_forward(m, d)
+    if sv is not None:
+        sv.reset(d, robot.STAND if targets is None else targets)
+    return d
+
+
+def _step(m, d, sv, targets):
+    """One simulation step towards the joint targets."""
+    if sv is None:
+        d.ctrl[:] = targets
+    else:
+        sv.command(targets)
+        sv.apply(d)
+    mujoco.mj_step(m, d)
+
+
+def _settle(m, d, targets, steps, sv=None):
+    for _ in range(steps):
+        _step(m, d, sv, targets)
+
+
+def standing(m: mujoco.MjModel, sv: servo_mod.Servo | None = None) -> dict:
+    d = _start(m, sv)
+    _settle(m, d, robot.STAND, SETTLE_STEPS, sv)
     feet = np.array([d.geom(f"{leg}_foot").xpos for leg in robot.LEGS])
     radius = m.geom(f"{robot.LEGS[0]}_foot").size[0]
     ground = feet[:, 2].min() - radius
@@ -132,16 +159,15 @@ def leg_inertia_hip(m: mujoco.MjModel) -> float:
     return float(total)
 
 
-def trot(m: mujoco.MjModel, speed: float = TROT_SPEED) -> tuple[float, float, float]:
-    d = mujoco.MjData(m)
-    robot.reset_standing(m, d)
+def trot(m: mujoco.MjModel, speed: float = TROT_SPEED, sv: servo_mod.Servo | None = None) -> tuple[float, float, float]:
+    d = _start(m, sv)
     substeps = round(robot.CONTROL_PERIOD / m.opt.timestep)
     torque = []
     t = 0.0
     for k in range(round(TROT_SECONDS / robot.CONTROL_PERIOD)):
-        d.ctrl[:] = gait.trot_targets(t, speed)
+        targets = gait.trot_targets(t, speed)
         for _ in range(substeps):
-            mujoco.mj_step(m, d)
+            _step(m, d, sv, targets)
         t += robot.CONTROL_PERIOD
         if t > TROT_SKIP_SECONDS:
             torque.append(np.abs(d.actuator_force) / robot.SERVO_STALL_TORQUE)
@@ -156,27 +182,25 @@ def trot(m: mujoco.MjModel, speed: float = TROT_SPEED) -> tuple[float, float, fl
             float(np.percentile(joint_speed, 95, axis=0).max()))
 
 
-def stand_up(m: mujoco.MjModel) -> float:
+def stand_up(m: mujoco.MjModel, sv: servo_mod.Servo | None = None) -> float:
     """Largest joint torque / stall torque while going from the crouch to the standing posture."""
-    d = mujoco.MjData(m)
-    mujoco.mj_resetData(m, d)
-    d.qpos[2] = 0.12
-    d.qpos[7:] = CROUCH
-    mujoco.mj_forward(m, d)
-    _settle(m, d, CROUCH, SETTLE_STEPS)  # rests on the ground with the legs folded
+    d = _start(m, sv, CROUCH)
+    _settle(m, d, CROUCH, SETTLE_STEPS, sv)  # rests on the ground with the legs folded
     steps = round(STAND_UP_SECONDS / m.opt.timestep)
     worst = 0.0
     for k in range(steps):
         a = (k + 1) / steps
-        d.ctrl[:] = (1 - a) * CROUCH + a * robot.STAND
-        mujoco.mj_step(m, d)
+        _step(m, d, sv, (1 - a) * CROUCH + a * robot.STAND)
         worst = max(worst, float(np.max(np.abs(d.actuator_force)) / robot.SERVO_STALL_TORQUE))
     return worst
 
 
-def compute(m: mujoco.MjModel | None = None) -> Targets:
+def compute(m: mujoco.MjModel | None = None, servo: servo_mod.ServoParams | None = None) -> Targets:
+    """The targets for model `m` (default: models/quadruped.xml), with the model's position actuators, or with the
+    servo model of erg.servo with the given parameters (nominal values, no randomisation)."""
     m = m if m is not None else robot.load()
-    s = standing(m)
-    p95, tmax, s95 = trot(m)
+    sv = servo_mod.Servo(m, servo) if servo is not None else None
+    s = standing(m, sv)
+    p95, tmax, s95 = trot(m, sv=sv)
     return Targets(mass=float(m.body_mass.sum()), leg_mass_fraction=leg_mass_fraction(m), leg_inertia_hip=leg_inertia_hip(m), trot_torque_p95=p95,
-                   trot_torque_max=tmax, trot_speed_p95=s95, stand_up_torque_max=stand_up(m), **s)
+                   trot_torque_max=tmax, trot_speed_p95=s95, stand_up_torque_max=stand_up(m, sv), **s)
