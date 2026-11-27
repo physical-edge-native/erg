@@ -1,0 +1,5 @@
+dependencies:
+  idf: ">=5.1"
+  # The same WebAssembly interpreter (WAMR) and version range as Dyne's ESP32 firmware
+  # (third_party/dyne/node-esp32/main/idf_component.yml).
+  espressif/wasm-micro-runtime: "^2.4.0"

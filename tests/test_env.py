@@ -20,7 +20,7 @@ Pass criteria:
 import mujoco
 import numpy as np
 
-from erg import robot
+from erg import exactmath, robot
 from erg.env import ACT_SIZE, COMMAND_MAX, N_LEGS, OBS_SIZE, STANCE_FRACTION, Env
 
 COMMAND = (0.2, -0.1, 0.3)
@@ -59,8 +59,8 @@ def test_observation_matches_state():
         assert abs(o[11] - 9.81) < 0.05 and np.max(np.abs(o[9:11])) < 0.05
         touch = d.sensordata[env.model.sensor(f"{leg}_touch").adr[0]]
         assert touch > 0 and o[15] == 1.0  # standing: every foot is pressed
-        a = 2 * np.pi * env.phase[i]
-        assert np.array_equal(o[16:18], [np.cos(a), np.sin(a)])  # gait phase (#51)
+        s, c = exactmath.sincos(2 * exactmath.PI * env.phase[i])
+        assert np.array_equal(o[16:18], [c, s])  # gait phase (#51), with erg.exactmath (#54)
         assert np.array_equal(o[18:21], COMMAND)
         assert np.array_equal(o[21:25], np.eye(N_LEGS)[i])
 

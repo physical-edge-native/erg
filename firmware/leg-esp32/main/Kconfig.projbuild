@@ -1,0 +1,71 @@
+menu "erg leg"
+
+config ERG_LEG_INDEX
+    int "Leg index (0 front left, 1 front right, 2 hind left, 3 hind right)"
+    range 0 3
+    default 0
+
+config ERG_SERVO_TX
+    int "GPIO to the servo bus adapter's RX"
+    default 43
+config ERG_SERVO_RX
+    int "GPIO from the servo bus adapter's TX"
+    default 44
+config ERG_SERVO_BAUD
+    int "Servo bus baud rate"
+    default 1000000
+
+config ERG_SERVO_ID_ABD
+    int "Servo id of the abduction joint"
+    default 1
+config ERG_SERVO_ID_FLEX
+    int "Servo id of the hip flexion joint"
+    default 2
+config ERG_SERVO_ID_KNEE
+    int "Servo id of the knee joint"
+    default 3
+
+config ERG_ZERO_ABD
+    int "Servo position at abduction angle 0"
+    range 0 4095
+    default 2048
+config ERG_ZERO_FLEX
+    int "Servo position at hip flexion angle 0"
+    range 0 4095
+    default 2048
+config ERG_ZERO_KNEE
+    int "Servo position at knee angle 0"
+    range 0 4095
+    default 2048
+config ERG_SIGN_ABD
+    int "Direction from servo steps to abduction angle (1 or -1)"
+    range -1 1
+    default 1
+config ERG_SIGN_FLEX
+    int "Direction from servo steps to hip flexion angle (1 or -1)"
+    range -1 1
+    default 1
+config ERG_SIGN_KNEE
+    int "Direction from servo steps to knee angle (1 or -1)"
+    range -1 1
+    default 1
+
+config ERG_I2C_SDA
+    int "IMU I2C SDA GPIO"
+    default 5
+config ERG_I2C_SCL
+    int "IMU I2C SCL GPIO"
+    default 6
+config ERG_IMU_ADDR
+    hex "IMU I2C address (LSM6DSOX: 0x6A, or 0x6B)"
+    default 0x6A
+
+config ERG_SWITCH_GPIO
+    int "Foot switch GPIO (switch to ground, internal pull-up)"
+    default 1
+
+config ERG_EMBED_POLICY
+    bool "Embed Dyne's mlp-actor, the policy and the check file (run scripts/make_firmware_files.py first)"
+    default n
+
+endmenu

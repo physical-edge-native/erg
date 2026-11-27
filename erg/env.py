@@ -46,7 +46,7 @@ import mujoco
 import numpy as np
 
 from erg import links as links_mod
-from erg import gait, robot
+from erg import exactmath, gait, robot
 
 N_LEGS = len(robot.LEGS)
 SENSOR_SIZE = 3 + 3 + 3 + 3 + 3 + 1  # one leg's own sensor values
@@ -221,9 +221,12 @@ class Env:
         return out
 
     def phase_values(self) -> np.ndarray:
-        """Cosine and sine of each leg's gait phase, shape (4, 2)."""
-        a = 2.0 * np.pi * self.phase
-        return np.stack([np.cos(a), np.sin(a)], axis=1)
+        """Cosine and sine of each leg's gait phase, shape (4, 2) (erg.exactmath: the same bits in the firmware)."""
+        out = np.empty((N_LEGS, PHASE_SIZE))
+        for i, p in enumerate(self.phase):
+            s, c = exactmath.sincos(2.0 * exactmath.PI * float(p))
+            out[i] = (c, s)
+        return out
 
     def observe(self) -> np.ndarray:
         """Observations of all legs, shape (4, OBS_SIZE); in central mode, shape (CENTRAL_OBS_SIZE,)."""

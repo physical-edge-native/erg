@@ -8,10 +8,12 @@ period apart. Each foot follows a path in its leg's vertical plane, relative to 
 - in the air (the second half), it moves forward again along a half-sine arc of height STEP_HEIGHT.
 
 The joint angles come from the two-link inverse kinematics of thigh and shank (lengths from erg.frame, which the
-MuJoCo model follows). Abduction stays at zero.
+MuJoCo model follows). Abduction stays at zero. The trigonometric functions are erg.exactmath's (since #54), so that the
+leg firmware computes the same targets bit for bit.
 """
 
-from math import acos, atan2, cos, pi, sin, sqrt
+from erg.exactmath import PI as pi
+from erg.exactmath import acos, atan2, cos, sin
 
 import numpy as np
 
@@ -31,7 +33,7 @@ def leg_angles(x: float, z: float) -> tuple[float, float]:
     """Hip flexion and knee angles that put the foot centre at (x forward, z up) from the hip flexion shaft.
     Knee bent backwards (negative angle), as in the standing posture."""
     r2 = x * x + z * z
-    c = (r2 - THIGH**2 - SHANK**2) / (2 * THIGH * SHANK)
+    c = (r2 - THIGH * THIGH - SHANK * SHANK) / (2 * THIGH * SHANK)
     knee = -acos(max(-1.0, min(1.0, c)))
     # A foot at angle phi from straight down (positive backwards) with the knee bent by `knee`.
     phi = atan2(-x, -z)
