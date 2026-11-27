@@ -4,7 +4,8 @@ Pass criteria:
 - given the same sequence of joint commands, the split mode and the central mode give the same physical state
   (positions, speeds, actuator forces, contacts' sensor readings) bit for bit at every control step: only the
   controller differs, not the body;
-- the central observation is each leg's own sensor values in the order of robot.LEGS followed by the command once,
+- the central observation is each leg's own sensor values and gait phase (#51) in the order of robot.LEGS followed
+  by the command once,
   equal bit for bit to the corresponding values of the split observations; its size is CENTRAL_OBS_SIZE;
 - the central action has 12 values in the order of robot.JOINT_NAMES and is clipped to the joint ranges as in the
   split mode.
@@ -13,7 +14,7 @@ Pass criteria:
 import numpy as np
 
 from erg import robot
-from erg.env import ACT_SIZE, CENTRAL_ACT_SIZE, CENTRAL_OBS_SIZE, N_LEGS, SENSOR_SIZE, Env
+from erg.env import ACT_SIZE, CENTRAL_ACT_SIZE, CENTRAL_OBS_SIZE, LEG_SIZE, N_LEGS, Env
 
 COMMAND = (0.1, 0.05, -0.2)
 
@@ -34,7 +35,7 @@ def test_same_commands_give_the_same_physical_state():
         for name in ("qpos", "qvel", "actuator_force", "sensordata"):
             assert np.array_equal(bits(getattr(split.data, name)), bits(getattr(central.data, name))), name
         assert obs_central.shape == (CENTRAL_OBS_SIZE,)
-        expected = np.concatenate([obs_split[:, :SENSOR_SIZE].ravel(), COMMAND])
+        expected = np.concatenate([obs_split[:, :LEG_SIZE].ravel(), COMMAND])
         assert np.array_equal(bits(obs_central), bits(expected))
 
 
