@@ -6,8 +6,14 @@ Pass criteria:
   and per leg one microcontroller, one IMU, one foot switch and one servo bus adapter (4 each);
 - stage 1 is exactly one leg (3 servos and one of each per-leg part), with at least one spare servo;
 - the parts to run the robot are listed (Issue #31): one 5 V regulator per microcontroller, a bench power supply in
-  stage 1, and at least one battery and a charger.
+  stage 1, and at least one battery and a charger;
+- the power parts match the servo voltage (Issue #60): the servos are the 12 V class, and the battery's cell count
+  keeps its voltage, full (4.2 V per cell) and nearly empty (3.5 V per cell), within the servo's and the servo bus
+  adapter's input range; the charger handles that cell count;
+- rows of stage "option" (parts not bought unless decided, such as foot force sensors) are not counted.
 """
+
+import re
 
 import csv
 from collections import Counter
@@ -25,7 +31,13 @@ COLUMNS = [
 ]
 PER_LEG_ROLES = ("microcontroller", "imu", "foot_switch", "bus_adapter", "regulator")
 POWER_ROLES = ("power_supply", "battery", "charger", "small_parts")
-ROLES = ("servo",) + PER_LEG_ROLES + POWER_ROLES
+OPTION_ROLES = ("foot_force",)
+ROLES = ("servo",) + PER_LEG_ROLES + POWER_ROLES + OPTION_ROLES
+STAGES = ("1", "2", "option")
+# Input ranges in volts: the Waveshare ST3215 (12 V class) servo 6-12.6 V; the Waveshare Bus Servo Adapter (A) is
+# labelled 9-12.6 V. The robot's supply must lie in both.
+SUPPLY_RANGE = (9.0, 12.6)
+CELL_FULL, CELL_LOW = 4.2, 3.5
 
 
 def read_bom():
@@ -38,7 +50,7 @@ def read_bom():
 def counts(rows, stages, spare):
     c = Counter()
     for r in rows:
-        if int(r["stage"]) in stages and (r["spare"] == "yes") == spare:
+        if r["stage"] in {str(x) for x in stages} and (r["spare"] == "yes") == spare:
             c[r["role"]] += int(r["quantity"])
     return c
 
@@ -47,7 +59,8 @@ def test_rows_are_well_formed():
     rows = read_bom()
     assert rows
     for r in rows:
-        assert r["stage"] in ("1", "2")
+        assert r["stage"] in STAGES
+        assert (r["stage"] == "option") == (r["role"] in OPTION_ROLES), r["part"]
         assert r["role"] in ROLES
         assert int(r["quantity"]) > 0
         assert r["spare"] in ("yes", "no")
@@ -83,3 +96,25 @@ def test_parts_to_run_the_robot_are_listed():
     assert whole["regulator"] == whole["microcontroller"]
     assert counts(rows, stages=(1,), spare=False)["power_supply"] == 1
     assert whole["battery"] >= 1 and whole["charger"] >= 1
+
+
+def cells(part):
+    m = re.search(r"\b(\d)S\b", part)
+    assert m, part
+    return int(m.group(1))
+
+
+def test_power_parts_match_the_servo_voltage():
+    rows = [r for r in read_bom() if r["stage"] != "option"]
+    for r in rows:
+        if r["role"] == "servo":
+            assert "12 V" in r["part"], r["part"]
+    batteries = [r for r in rows if r["role"] == "battery"]
+    for r in batteries:
+        n = cells(r["part"])
+        assert SUPPLY_RANGE[0] <= round(n * CELL_LOW, 6) and round(n * CELL_FULL, 6) <= SUPPLY_RANGE[1], r["part"]
+    n = {cells(r["part"]) for r in batteries}
+    assert len(n) == 1
+    for r in rows:
+        if r["role"] == "charger":
+            assert re.search(r"2-3 cell|\b3S\b", r["part"]), r["part"]
