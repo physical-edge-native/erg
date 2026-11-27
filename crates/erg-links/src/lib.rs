@@ -1,9 +1,9 @@
 //! erg-links: messages between the legs of the erg robot, in Dyne's wire format (Issue #33).
 //!
 //! Each leg sends its neighbours one message per control step with [`N_VALUES`] values: gravity direction (3),
-//! angular velocity (3), foot contact (1) and a learned vector (4), as decided in erg's robot design record. The
-//! message is one Dyne `IFACE_BAND` message with one point of 11 quantities: a 24-byte header, the count and
-//! per-point fields (8 bytes) and 88 bytes of values, 120 bytes in all. The encoding itself is Dyne's `dyne-wire`.
+//! angular velocity (3), foot contact (1), a learned vector (4) and its gait phase (2, cosine and sine; Issue #51).
+//! The message is one Dyne `IFACE_BAND` message with one point of 13 quantities: a 24-byte header, the count and
+//! per-point fields (8 bytes) and 104 bytes of values, 136 bytes in all. The encoding itself is Dyne's `dyne-wire`.
 //!
 //! The header fields are used as follows: `quantity` = inertial, `src` = the sending leg (0..4 in the order
 //! front-left, front-right, hind-left, hind-right), `step` = the control step, `t_us` = the time stamp in
@@ -19,8 +19,8 @@ pub mod net;
 use dyne_wire::{band_get, decode, encode, Header, Payload, KIND_IFACE_BAND, QTY_INERTIAL};
 
 /// Values in one leg's message.
-pub const N_VALUES: usize = 11;
-/// Length of one leg's message in bytes: header 24 + count and per-point 8 + 11 values of 8 bytes.
+pub const N_VALUES: usize = 13;
+/// Length of one leg's message in bytes: header 24 + count and per-point 8 + 13 values of 8 bytes.
 pub const MSG_LEN: usize = dyne_wire::HDR_LEN + 8 + 8 * N_VALUES;
 /// Capacity of the message buffer (room for longer messages, which decoding rejects).
 pub const MSG_CAP: usize = 256;
@@ -135,11 +135,11 @@ mod tests {
 
     #[test]
     fn round_trip_and_length() {
-        let v = [1.0, -2.5, 0.0, -0.0, 1e-300, f64::INFINITY, 3.25, 0.5, -7.0, 2.0, 9.75];
+        let v = [1.0, -2.5, 0.0, -0.0, 1e-300, f64::INFINITY, 3.25, 0.5, -7.0, 2.0, 9.75, -1.0, 0.125];
         let mut buf = [0u8; MSG_CAP];
         let n = encode_leg(&mut buf, 2, 123, 456, &v).unwrap();
         assert_eq!(n, MSG_LEN);
-        assert_eq!(MSG_LEN, 120);
+        assert_eq!(MSG_LEN, 136);
         let (hdr, back) = decode_leg(&buf[..n]).unwrap();
         assert_eq!((hdr.src, hdr.step, hdr.t_us), (2, 123, 456));
         for (a, b) in v.iter().zip(back.iter()) {

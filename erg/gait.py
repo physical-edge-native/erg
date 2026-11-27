@@ -48,12 +48,14 @@ def foot_path(s: float, stride: float) -> tuple[float, float]:
     return -stride / 2 + stride * u, -STAND_DEPTH + STEP_HEIGHT * sin(pi * u)
 
 
+def leg_targets(s: float, stride: float = 0.0) -> np.ndarray:
+    """One leg's 3 joint targets (rad; abduction, hip flexion, knee) at phase s in [0, 1) of its cycle.
+    With stride 0 the foot steps in place: the base gait of the learned controllers (Issue #51)."""
+    flex, knee = leg_angles(*foot_path(s % 1.0, stride))
+    return np.array([0.0, flex, knee])
+
+
 def trot_targets(t: float, speed: float) -> np.ndarray:
     """The 12 joint targets (rad) at time t (s) for a forward speed (m/s), in the order of robot.JOINT_NAMES."""
     stride = speed * PERIOD / 2  # the foot is on the ground half of the period, moving back at `speed`
-    out = []
-    for leg in robot.LEGS:
-        s = (t / PERIOD + PHASE[leg]) % 1.0
-        flex, knee = leg_angles(*foot_path(s, stride))
-        out += [0.0, flex, knee]
-    return np.array(out)
+    return np.concatenate([leg_targets((t / PERIOD + PHASE[leg]) % 1.0, stride) for leg in robot.LEGS])

@@ -1,7 +1,7 @@
 """PPO training (Issue #42).
 
 Pass criteria:
-- the actor sizes are under the 8,192-parameter limit of Dyne's full mlp-actor (5,575 per leg, 6,204 central);
+- the actor sizes are under the 8,192-parameter limit of Dyne's full mlp-actor (6,008 per leg, 6,784 central since #51);
 - for both forms, a very short training (1,024 environment steps, 2 environments) run twice with the same seed
   gives the same weights bit for bit, and a different seed gives different weights; every logged loss is finite;
 - the reward rewards tracking: standing still scores higher with a zero command than with a forward command;
@@ -31,8 +31,8 @@ def run(form, seed):
 
 
 def test_actor_sizes_fit_dyne():
-    assert ppo.n_params(ppo.Agent("split").actor) == 5575
-    assert ppo.n_params(ppo.Agent("central").actor) == 6204
+    assert ppo.n_params(ppo.Agent("split").actor) == 6008  # 5,575 before #51
+    assert ppo.n_params(ppo.Agent("central").actor) == 6784  # 6,204 before #51
     assert all(ppo.n_params(ppo.Agent(f).actor) <= 8192 for f in ("split", "central"))
 
 

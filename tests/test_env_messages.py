@@ -21,10 +21,10 @@ import pytest
 
 from erg import robot
 from erg.env import (
-    ACT_SIZE, AGE_CAP, LEARNED, MSG_SLOT, MSG_VALUES, N_LEGS, OBS_SIZE, SENSOR_SIZE, Env,
+    ACT_SIZE, AGE_CAP, LEARNED, LEG_SIZE, MSG_SLOT, MSG_VALUES, N_LEGS, OBS_SIZE, SENSOR_SIZE, Env,
 )
 
-SLOTS = slice(SENSOR_SIZE + 3 + N_LEGS, OBS_SIZE)
+SLOTS = slice(LEG_SIZE + 3 + N_LEGS, OBS_SIZE)
 OTHERS = [[s for s in range(N_LEGS) if s != r] for r in range(N_LEGS)]
 
 
@@ -47,13 +47,15 @@ def test_values_arrive_one_step_later_bit_for_bit():
         a = random_actions(rng, scale=0.5)
         obs = env.step(a)
         sent = env.message_values()  # what each leg sent after this step
+        phase = env.phase_values()
         obs = env.step(random_actions(rng, scale=0.5))
         for r in range(N_LEGS):
             for j, s in enumerate(OTHERS[r]):
                 got = slots(obs)[r, j]
                 assert got[MSG_VALUES] == 1
                 assert np.array_equal(got[:MSG_VALUES].view(np.uint64), sent[s].view(np.uint64))
-        assert np.array_equal(sent[:, -LEARNED:], np.clip(a[:, ACT_SIZE:], -1, 1))
+        assert np.array_equal(sent[:, -LEARNED - 2:-2], np.clip(a[:, ACT_SIZE:], -1, 1))
+        assert np.array_equal(sent[:, -2:], phase)  # gait phase (#51)
 
 
 @pytest.mark.parametrize("links,silent", [
