@@ -8,9 +8,10 @@ details needed to print one leg for a test fit, on the same placements:
   hole on every part screwed to a horn;
 - **knee**: an M3 screw through a 3 x 5 mm bronze sleeve in the shank, into a nut held in the thigh, so that the shank
   turns on the sleeve and the screw clamps only the sleeve;
-- **push rod**: a crank on the knee servo's horn and a crank on the shank, each with a hole at radius CRANK for an M2
-  ball stud (nut in a hexagonal pocket on the back); a printed rod between two M2 ball links, outside the knee screw's
-  head, so that it never meets the knee hubs over the whole knee range;
+- **push rod**: a crank on the knee servo's horn and a crank on the shank, each with a hole at radius CRANK (18 mm)
+  for an M2 ball (nut in a hexagonal pocket on the back); a carbon-fibre tube between two M2 ball links, whose threaded
+  M2 studs are glued into the tube's bore; the rod runs outside the knee screw's head, so that it never meets the knee
+  hubs over the whole knee range (crank length and tube: the maintainer's choice of 2026-11-27);
 - **foot**: a separate printed foot pushed onto the end of the shank and held by one M2 screw, with a pocket for the
   Omron SS-5GLD foot switch (slid in from the outer side, lever out through a slot in the bottom), a cylindrical seat
   with a groove for a rubber cap over the 12 mm-radius sphere, and a hole for the switch's wires;
@@ -54,7 +55,6 @@ BOTTOM_CONNECTORS = ((-4.6, 1.4), (-8.6, 8.6), (-19.4, -SERVO_FACE))
 # --- Screws and fits ---------------------------------------------------------------------------------------------
 M2_HOLE = 2.5  # clearance for M2 (frame screws into the servo's pilot holes, ball studs, foot screw)
 M2_CSK = 4.2  # countersink for an M2 flat head (3.8 mm head)
-M2_PILOT = 1.6  # for an M2 thread cut into the printed rod's ends
 M2_NUT = 4.3  # across flats of the pocket for an M2 nut (4.0 mm)
 M2_NUT_T = 1.8  # pocket depth (nut 1.6 mm)
 HORN_SCREW_HOLE = 3.0  # clearance for the horn screws (M2.5); check on the real servo's horn screws
@@ -74,8 +74,11 @@ BALL_Y = 7.0  # plane of the ball centres (outside the knee screw's head, which 
 BALL_HEIGHT = 4.0  # ball centre above the face the stud is screwed to; check on the real ball studs
 BALL_LINK_R, BALL_LINK_W = 3.5, 6.0  # socket of an M2 ball link: radius around the ball, width along the stud
 BALL_LINK_REACH = 9.0  # ball centre to the end of the link's threaded neck; check on the real ball links
-ROD_SIDE = 5.6  # printed rod's square section (2 mm of wall around the pilot holes)
-ROD_THREAD_DEPTH = 7.0  # M2 pilot holes in the rod's ends, for threaded studs into the ball links
+# Push rod: a carbon-fibre tube, assumed 4 mm outside and 3 mm inside diameter (pultruded); check on the real tube.
+TUBE_OD, TUBE_ID = 4.0, 3.0
+TUBE_DENSITY = 1.55e-6  # kg/mm^3, carbon fibre in epoxy
+TUBE_E = 100e3  # N/mm^2 (100 GPa), the low end of 100-130 GPa for pultruded carbon tubes, for the buckling load
+STUD_GLUE_DEPTH = 8.0  # each M2 threaded stud is glued (epoxy) this deep into the tube's 3 mm bore
 SHANK_Y0, SHANK_Y1 = -4.0, 3.0  # the shank's faces (it is printed lying on the y = SHANK_Y0 face)
 KNEE_HUB_R = 7.5  # shank's knee hub
 THIGH_HUB_R = 7.0  # thigh's knee hub
@@ -350,14 +353,35 @@ def crank() -> Solid:
     return solid - horn * horn_cut(y1 - y0) - _ball_stud_cut(CRANK_FACE_Y, y0)
 
 
+TUBE_LENGTH = ROD_LENGTH - 2 * BALL_LINK_REACH  # between the ends of the two ball links' necks
+
+
 def rod() -> Solid:
-    """The printed rod, in its own frame (along z, the upper ball centre at the origin, the lower at -ROD_LENGTH):
-    a square bar between the ends of the two ball links' necks, with M2 pilot holes in its ends."""
+    """The carbon-fibre tube, in the rod's frame (along z, the upper ball centre at the origin, the lower at
+    -ROD_LENGTH), between the ends of the two ball links' necks. Bought and cut to length, not printed."""
     z0, z1 = -ROD_LENGTH + BALL_LINK_REACH, -BALL_LINK_REACH
-    bar = Pos(0, 0, (z0 + z1) / 2) * Box(ROD_SIDE, ROD_SIDE, z1 - z0)
-    for z, s in ((z1, -1), (z0, 1)):
-        bar -= Pos(0, 0, z + s * ROD_THREAD_DEPTH / 2) * Cylinder(M2_PILOT / 2, ROD_THREAD_DEPTH + 0.2)
-    return bar
+    return Pos(0, 0, (z0 + z1) / 2) * (Cylinder(TUBE_OD / 2, z1 - z0) - Cylinder(TUBE_ID / 2, z1 - z0))
+
+
+def rod_mass() -> float:
+    """The tube's mass (kg); the ball links and their studs are bought parts, like the screws."""
+    return rod().volume * TUBE_DENSITY
+
+
+def rod_buckling_load() -> float:
+    """Euler buckling load (N) of the tube, pinned at both ball centres (the conservative length ROD_LENGTH)."""
+    from math import pi
+    second_moment = pi / 64 * (TUBE_OD**4 - TUBE_ID**4)
+    return pi**2 * TUBE_E * second_moment / ROD_LENGTH**2
+
+
+ROD_SAFETY = 2.0  # safety factor on the buckling load
+
+
+def rod_force(knee: float, torque: float = design.SERVO_STALL_TORQUE) -> float:
+    """The rod's force (N) when the knee servo exerts `torque` (N*m) at knee angle `knee` (rad): the parallelogram
+    passes the torque on one to one, through the crank's lever arm CRANK * |sin(knee + CRANK_PHASE)|."""
+    return torque / (CRANK / 1000 * abs(sin(knee + CRANK_PHASE)))
 
 
 def ball_links() -> Solid:
@@ -473,7 +497,7 @@ def print_parts() -> dict[str, Solid]:
     """The printed parts of the test print, each in its own design frame."""
     return {"torso_cradle_fl": torso_cradle(), "shoulder": shoulder(), "thigh": thigh(), "thigh_spacer": thigh_spacer(),
             "crank": crank(),
-            "rod": rod(), "shank": shank(), "foot": foot()}
+            "shank": shank(), "foot": foot()}
 
 
 # Rotation that puts each part's chosen flat face on the bed (z = 0), as (rx, ry, rz) in degrees applied in that order.
@@ -483,7 +507,6 @@ PRINT_ORIENTATION = {
     "thigh": (90, 0, 0),  # the plate's inner face on the bed; the knee hub stands up
     "thigh_spacer": (90, 0, 0),
     "crank": (90, 0, 0),  # the face on the horn on the bed
-    "rod": (0, 90, 0),  # lying on a side
     "shank": (90, 0, 0),  # lying on its inner face
     "foot": (180, 0, 0),  # upside down, on its flat top
 }

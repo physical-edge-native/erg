@@ -3,9 +3,12 @@
 Pass criteria:
 - every printed part is a valid solid;
 - the printed masses of the leg are those used by erg/design.py (and so by the MuJoCo model), to 1 g: shoulder,
-  thigh with its spacer, crank with rod, shank with foot. The torso with detailed cradles is lighter than the design's
-  torso (the layout's side walls reached into the abduction servos and their horns, which the detailed torso opens);
-  it is checked not to be heavier, and the design keeps the layout's value until the whole torso is detailed;
+  thigh with its spacer, crank with the carbon tube (4 x 3 mm, density 1.55 g/cm^3), shank with foot. The torso with
+  detailed cradles is lighter than the design's torso (the layout's side walls reached into the abduction servos and
+  their horns, which the detailed torso opens); it is checked not to be heavier, and the design keeps the layout's
+  value until the whole torso is detailed;
+- at the knee servo's stall torque the push rod's force stays under the tube's Euler buckling load divided by a safety
+  factor of 2 at standing and over the stand-up sequence (docs/design/2026-11-27-leg-print.md);
 - every screw hole is where the servo's (or horn's, or crank's) pattern parameters put it: no material on the hole's
   axis, material just outside the hole's radius;
 - no two parts overlap (overlap volume under 0.5 mm^3, as in tests/test_cad_l1.py) at the standing posture, over the
@@ -49,7 +52,7 @@ def test_masses_match_the_design(parts):
     expected = {
         "shoulder": (m["shoulder"], design.SHOULDER),
         "thigh": (m["thigh"] + m["thigh_spacer"], design.THIGH_LINK),
-        "crank and rod": (m["crank"] + m["rod"], design.PUSH_ROD),
+        "crank and rod": (m["crank"] + cad_leg.rod_mass(), design.PUSH_ROD),
         "shank and foot": (m["shank"] + m["foot"], design.SHANK_LINK),
     }
     for name, (got, want) in expected.items():
@@ -95,12 +98,10 @@ def test_screw_holes_follow_the_servo_patterns(parts):
     horn_holes(parts["thigh_spacer"], hip_horn, 0.5)
     knee_horn = Location(Plane(origin=(0, cad_leg.CRANK_Y0, 0), x_dir=(1, 0, 0), z_dir=(0, 1, 0)))
     horn_holes(parts["crank"], knee_horn, 1.5)
-    # ball studs at radius CRANK on both cranks, M2 pilot holes in the rod's ends
+    # balls at radius CRANK on both cranks
     assert_hole(parts["crank"], Location(), 0, cad_leg.CRANK_FACE_Y - 2.5, cad_leg.CRANK, cad_leg.M2_HOLE, "y")
     crank_tip = Rot(0, np.degrees(cad_leg.CRANK_PHASE), 0)
     assert_hole(parts["shank"], crank_tip, 0, cad_leg.SHANK_Y1 - 2.5, cad_leg.CRANK, cad_leg.M2_HOLE, "y")
-    for z in (-cad_leg.BALL_LINK_REACH - 2, -cad_leg.ROD_LENGTH + cad_leg.BALL_LINK_REACH + 2):
-        assert_hole(parts["rod"], Location(), 0, 0, z, cad_leg.M2_PILOT)
     # knee: the screw's hole through the thigh's hub, the sleeve's bore in the shank
     assert_hole(parts["thigh"], Location(), 0, cad_leg.THIGH_HUB_Y0 + 2, cad_leg.KNEE_Z, cad_leg.M3_HOLE, "y")
     assert_hole(parts["shank"], Location(), 0, cad_leg.SHANK_Y0 + 1, 0, cad_leg.SLEEVE_BORE, "y")
@@ -133,3 +134,13 @@ def test_export_writes_every_part(tmp_path):
         assert step.stat().st_size > 1000 and stl.stat().st_size > 1000, name
     for name, solid in cad_leg.print_parts().items():
         assert abs(cad_leg.oriented(name, solid).bounding_box().min.Z) < 1e-6, name
+
+
+def test_rod_holds_the_stall_torque_where_the_robot_works():
+    """At the knee servo's stall torque the rod's force stays under the tube's buckling load divided by the safety
+    factor at standing and at every knee angle the stand-up sequence reaches; only the last few hundredths of a radian
+    before the knee limit at -0.2 rad exceed it, where the firmware is to lower the knee torque (planned, option C)."""
+    allowable = cad_leg.rod_buckling_load() / cad_leg.ROD_SAFETY
+    knees = [p[2] for p in reached_poses()] + [p[2] for p in poses()]
+    assert max(cad_leg.rod_force(k) for k in knees) < allowable
+    assert cad_leg.rod_force(-0.25) < allowable < cad_leg.rod_force(design.KNEE_RANGE[1])

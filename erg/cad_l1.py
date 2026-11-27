@@ -42,7 +42,7 @@ THIGH, SHANK = design.THIGH * MM, design.SHANK * MM
 KNEE_DOWN = design.KNEE_SERVO_DOWN * MM
 SHAFT = design.SERVO_SHAFT * MM
 FOOT_R = design.FOOT_RADIUS * MM
-CRANK = 12.0  # crank radius, both ends of the parallelogram
+CRANK = 18.0  # crank radius, both ends of the parallelogram (12 mm until the maintainer's choice of 2026-11-27, #72)
 
 
 def servo() -> Solid:
