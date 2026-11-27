@@ -24,7 +24,8 @@ SHANK = design.SHANK  # m
 PERIOD = 0.45  # s, one full gait cycle (0.35 s for the first body, #32; 0.45 s for body L1, #59, within the servo's speed)
 STEP_HEIGHT = 0.012  # m, foot lift in the air (0.015 m for the first body; lower for body L1, #59, within the servo's speed)
 # Height of the foot centre below the hip flexion shaft: that of the standing posture (robot.STAND).
-STAND_DEPTH = THIGH * cos(robot.STAND[1]) + SHANK * cos(robot.STAND[1] + robot.STAND[2])
+STAND_DEPTH = design.STAND_DEPTH
+FOOT_X = design.STAND_FOOT_X  # the foot's path is centred this far ahead of the hip flexion shaft
 # Phase of each leg in the order of robot.LEGS (FL, FR, HL, HR): diagonal pairs move together.
 PHASE = {"FL": 0.0, "FR": 0.5, "HL": 0.5, "HR": 0.0}
 
@@ -45,9 +46,9 @@ def foot_path(s: float, stride: float) -> tuple[float, float]:
     """Foot position at phase s in [0, 1) of its cycle, for the given stride (m)."""
     if s < 0.5:  # on the ground: from +stride/2 back to -stride/2
         u = s / 0.5
-        return stride / 2 - stride * u, -STAND_DEPTH
+        return stride / 2 - stride * u + FOOT_X, -STAND_DEPTH
     u = (s - 0.5) / 0.5  # in the air: forward again, lifted
-    return -stride / 2 + stride * u, -STAND_DEPTH + STEP_HEIGHT * sin(pi * u)
+    return -stride / 2 + stride * u + FOOT_X, -STAND_DEPTH + STEP_HEIGHT * sin(pi * u)
 
 
 def leg_targets(s: float, stride: float = 0.0) -> np.ndarray:

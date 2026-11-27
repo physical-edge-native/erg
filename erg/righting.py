@@ -10,9 +10,10 @@ legs fold, so the sequence starts by folding the legs and then gets up from the 
 3. the other side's legs move to OTHER_2, which brings the body over onto its belly;
 4. fold all legs again, then stand up to robot.STAND.
 
-The three leg poses were found by a random search in MuJoCo over the joint ranges (2026-11-27, 300 candidates; this
-one got up in every one of 20 trials from the back, from either side and from standing, with random heading, tilt and
-joint offsets, at most 0.47 of the stall torque), not designed by hand; they are fixed here. The push side does not
+The three leg poses were found by a random search in MuJoCo over the joint ranges (2026-11-27, 4,500 candidates in
+three runs on the final body L1; this one got up in each of 10 trials from the back with either push side, with random
+heading, tilt and joint offsets, at the lowest torque found: 0.52 of the stall torque), not designed by hand; they are
+fixed here. tests/test_righting.py checks it from the back, either side and standing. The push side does not
 matter on the back; both are tested. Each move is a straight line in joint space over its duration.
 """
 
@@ -21,9 +22,9 @@ import numpy as np
 from erg import robot
 
 FOLD_LEG = np.array([0.0, 1.3, -2.5])  # abduction, hip flexion, knee
-PUSH = np.array([2.59, -0.55, -2.08])  # legs of the push side; the abduction sign is the side's (left +, right -)
-OTHER_1 = np.array([-1.98, 1.12, -0.96])
-OTHER_2 = np.array([-2.38, 1.53, -0.78])
+PUSH = np.array([1.76, 1.41, -0.51])  # legs of the push side; the abduction sign is the side's (left +, right -)
+OTHER_1 = np.array([-1.99, -0.9, -1.38])
+OTHER_2 = np.array([-2.45, 0.08, -0.61])
 MOVE_SECONDS = 2.0  # each of the three big moves
 SETTLE_SECONDS = 1.0
 

@@ -20,7 +20,7 @@
 #define OBS_LEG_ID 21 /* 4 values */
 #define OBS_SLOTS 25 /* 42 values */
 /* Standing posture of one leg (rad): abduction, hip flexion, knee. */
-#define STAND_ANGLES {0.0, 0.7951355856763409, -1.540528547532401}
+#define STAND_ANGLES {0.0, 0.8504476094685183, -1.5371584045999214}
 /* Policy outputs per leg: joint corrections, learned values, then the clock frequency correction. */
 #define ACT_FREQ 7
 #define ACT_SIZE_ALL 8
@@ -33,7 +33,8 @@
 /* Base gait (erg.gait), values computed in Python so that the firmware uses the same bits. */
 #define GAIT_PERIOD 0.45
 #define GAIT_STEP_HEIGHT 0.012
-#define GAIT_STAND_DEPTH 0.13999999999999999
+#define GAIT_STAND_DEPTH 0.14
+#define GAIT_FOOT_X -0.008
 #define GAIT_THIGH 0.095
 #define GAIT_SHANK 0.1
 #define GAIT_THIGH_SQ 0.009025

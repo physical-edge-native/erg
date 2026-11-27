@@ -14,23 +14,25 @@
     <geom name="floor" type="plane" size="5 5 0.1" contype="0" conaffinity="1"/>
     <body name="torso" pos="0 0 0.157">
       <freejoint name="root"/>
-      <inertial pos="0.00346154 -2.085e-19 -0.000576923" mass="0.52" fullinertia="0.000702318 0.00162248 0.00210079 -1.18585e-20 2.14615e-05 0"/>
-      <geom name="torso" type="box" conaffinity="2" pos="0 0 0.0" size="0.1 0.045 0.025"/>
-      <site name="FL_imu" pos="0.085 0.045 0.025"/>
-      <site name="FR_imu" pos="0.085 -0.045 0.025"/>
-      <site name="HL_imu" pos="-0.085 0.045 0.025"/>
-      <site name="HR_imu" pos="-0.085 -0.045 0.025"/>
+      <inertial pos="0.00341556 -2.05731e-19 0.000683112" mass="0.527" fullinertia="0.000516414 0.000908994 0.00121372 0 2.37296e-05 0"/>
+      <geom name="torso" type="box" conaffinity="2" pos="0 0 0.0" size="0.0656 0.051 0.0165"/>
+      <site name="FL_imu" pos="0.05 0.03 0.0165"/>
+      <site name="FR_imu" pos="0.05 -0.03 0.0165"/>
+      <site name="HL_imu" pos="-0.05 0.03 0.0165"/>
+      <site name="HR_imu" pos="-0.05 -0.03 0.0165"/>
       <!-- FL -->
-      <body name="FL_hip" pos="0.085 0.045 0">
-        <inertial pos="-0.0132 0.037 0.00528" mass="0.125" fullinertia="2.43819e-05 6.16006e-05 6.1927e-05 0 1.1088e-05 0"/>
+      <body name="FL_hip" pos="0.085 0.04 0">
+        <inertial pos="-0.00292174 -0.00566087 0.0119928" mass="0.069" fullinertia="1.91257e-05 1.74793e-05 1.19042e-05 5.06191e-07 -4.01739e-07 8.78804e-08"/>
         <joint name="FL_hip_abd" class="abd"/>
-        <geom type="box" pos="-0.015 0.037 0.004" size="0.04 0.0175 0.02"/>
-        <body name="FL_thigh" pos="0 0.055 0">
-          <inertial pos="0 0 -0.0475" mass="0.015" fullinertia="1.14612e-05 1.16013e-05 5e-07 0 0 0"/>
+        <geom type="box" pos="0 -0.0063 0.0125" size="0.01235 0.0175 0.0226"/>
+        <body name="FL_thigh" pos="0 0.06 0">
+          <inertial pos="0 -0.0202513 -0.0186013" mass="0.079" fullinertia="7.15564e-05 6.23074e-05 1.80095e-05 0 0 1.09854e-05"/>
           <joint name="FL_hip_flex" class="flex"/>
           <geom type="capsule" fromto="0 0 0 0 0 -0.095" size="0.009" contype="3"/>
+          <geom type="box" pos="0 -0.0247 -0.0055" size="0.01235 0.0175 0.0226" contype="3"/>
+          <geom type="box" pos="0 -0.04535 -0.0415" size="0.008 0.00125 0.0535" contype="3"/>
           <body name="FL_shank" pos="0 0 -0.095">
-            <inertial pos="0 0 -0.0605263" mass="0.019" fullinertia="2.08414e-05 2.09064e-05 6.91667e-07 0 0 0"/>
+            <inertial pos="0 0 -0.06" mass="0.02" fullinertia="2.1792e-05 2.18613e-05 7.2e-07 0 0 0"/>
             <joint name="FL_knee" class="knee"/>
             <geom type="capsule" fromto="0 0 0 0 0 -0.088" size="0.007" contype="3"/>
             <geom name="FL_foot" type="sphere" pos="0 0 -0.1" size="0.012" contype="3"/>
@@ -39,16 +41,18 @@
         </body>
       </body>
       <!-- FR -->
-      <body name="FR_hip" pos="0.085 -0.045 0">
-        <inertial pos="-0.0132 -0.037 0.00528" mass="0.125" fullinertia="2.43819e-05 6.16006e-05 6.1927e-05 0 1.1088e-05 0"/>
+      <body name="FR_hip" pos="0.085 -0.04 0">
+        <inertial pos="-0.00292174 0.00566087 0.0119928" mass="0.069" fullinertia="1.91257e-05 1.74793e-05 1.19042e-05 -5.06191e-07 -4.01739e-07 -8.78804e-08"/>
         <joint name="FR_hip_abd" class="abd"/>
-        <geom type="box" pos="-0.015 -0.037 0.004" size="0.04 0.0175 0.02"/>
-        <body name="FR_thigh" pos="0 -0.055 0">
-          <inertial pos="0 0 -0.0475" mass="0.015" fullinertia="1.14612e-05 1.16013e-05 5e-07 0 0 0"/>
+        <geom type="box" pos="0 0.0063 0.0125" size="0.01235 0.0175 0.0226"/>
+        <body name="FR_thigh" pos="0 -0.06 0">
+          <inertial pos="0 0.0202513 -0.0186013" mass="0.079" fullinertia="7.15564e-05 6.23074e-05 1.80095e-05 0 0 -1.09854e-05"/>
           <joint name="FR_hip_flex" class="flex"/>
           <geom type="capsule" fromto="0 0 0 0 0 -0.095" size="0.009" contype="3"/>
+          <geom type="box" pos="0 0.0247 -0.0055" size="0.01235 0.0175 0.0226" contype="3"/>
+          <geom type="box" pos="0 0.04535 -0.0415" size="0.008 0.00125 0.0535" contype="3"/>
           <body name="FR_shank" pos="0 0 -0.095">
-            <inertial pos="0 0 -0.0605263" mass="0.019" fullinertia="2.08414e-05 2.09064e-05 6.91667e-07 0 0 0"/>
+            <inertial pos="0 0 -0.06" mass="0.02" fullinertia="2.1792e-05 2.18613e-05 7.2e-07 0 0 0"/>
             <joint name="FR_knee" class="knee"/>
             <geom type="capsule" fromto="0 0 0 0 0 -0.088" size="0.007" contype="3"/>
             <geom name="FR_foot" type="sphere" pos="0 0 -0.1" size="0.012" contype="3"/>
@@ -57,16 +61,18 @@
         </body>
       </body>
       <!-- HL -->
-      <body name="HL_hip" pos="-0.085 0.045 0">
-        <inertial pos="0.0132 0.037 0.00528" mass="0.125" fullinertia="2.43819e-05 6.16006e-05 6.1927e-05 0 -1.1088e-05 0"/>
+      <body name="HL_hip" pos="-0.085 0.04 0">
+        <inertial pos="0.00292174 -0.00566087 0.0119928" mass="0.069" fullinertia="1.91257e-05 1.74793e-05 1.19042e-05 -5.06191e-07 4.01739e-07 8.78804e-08"/>
         <joint name="HL_hip_abd" class="abd"/>
-        <geom type="box" pos="0.015 0.037 0.004" size="0.04 0.0175 0.02"/>
-        <body name="HL_thigh" pos="0 0.055 0">
-          <inertial pos="0 0 -0.0475" mass="0.015" fullinertia="1.14612e-05 1.16013e-05 5e-07 0 0 0"/>
+        <geom type="box" pos="0 -0.0063 0.0125" size="0.01235 0.0175 0.0226"/>
+        <body name="HL_thigh" pos="0 0.06 0">
+          <inertial pos="0 -0.0202513 -0.0186013" mass="0.079" fullinertia="7.15564e-05 6.23074e-05 1.80095e-05 0 0 1.09854e-05"/>
           <joint name="HL_hip_flex" class="flex"/>
           <geom type="capsule" fromto="0 0 0 0 0 -0.095" size="0.009" contype="3"/>
+          <geom type="box" pos="0 -0.0247 -0.0055" size="0.01235 0.0175 0.0226" contype="3"/>
+          <geom type="box" pos="0 -0.04535 -0.0415" size="0.008 0.00125 0.0535" contype="3"/>
           <body name="HL_shank" pos="0 0 -0.095">
-            <inertial pos="0 0 -0.0605263" mass="0.019" fullinertia="2.08414e-05 2.09064e-05 6.91667e-07 0 0 0"/>
+            <inertial pos="0 0 -0.06" mass="0.02" fullinertia="2.1792e-05 2.18613e-05 7.2e-07 0 0 0"/>
             <joint name="HL_knee" class="knee"/>
             <geom type="capsule" fromto="0 0 0 0 0 -0.088" size="0.007" contype="3"/>
             <geom name="HL_foot" type="sphere" pos="0 0 -0.1" size="0.012" contype="3"/>
@@ -75,16 +81,18 @@
         </body>
       </body>
       <!-- HR -->
-      <body name="HR_hip" pos="-0.085 -0.045 0">
-        <inertial pos="0.0132 -0.037 0.00528" mass="0.125" fullinertia="2.43819e-05 6.16006e-05 6.1927e-05 0 -1.1088e-05 0"/>
+      <body name="HR_hip" pos="-0.085 -0.04 0">
+        <inertial pos="0.00292174 0.00566087 0.0119928" mass="0.069" fullinertia="1.91257e-05 1.74793e-05 1.19042e-05 5.06191e-07 4.01739e-07 -8.78804e-08"/>
         <joint name="HR_hip_abd" class="abd"/>
-        <geom type="box" pos="0.015 -0.037 0.004" size="0.04 0.0175 0.02"/>
-        <body name="HR_thigh" pos="0 -0.055 0">
-          <inertial pos="0 0 -0.0475" mass="0.015" fullinertia="1.14612e-05 1.16013e-05 5e-07 0 0 0"/>
+        <geom type="box" pos="0 0.0063 0.0125" size="0.01235 0.0175 0.0226"/>
+        <body name="HR_thigh" pos="0 -0.06 0">
+          <inertial pos="0 0.0202513 -0.0186013" mass="0.079" fullinertia="7.15564e-05 6.23074e-05 1.80095e-05 0 0 -1.09854e-05"/>
           <joint name="HR_hip_flex" class="flex"/>
           <geom type="capsule" fromto="0 0 0 0 0 -0.095" size="0.009" contype="3"/>
+          <geom type="box" pos="0 0.0247 -0.0055" size="0.01235 0.0175 0.0226" contype="3"/>
+          <geom type="box" pos="0 0.04535 -0.0415" size="0.008 0.00125 0.0535" contype="3"/>
           <body name="HR_shank" pos="0 0 -0.095">
-            <inertial pos="0 0 -0.0605263" mass="0.019" fullinertia="2.08414e-05 2.09064e-05 6.91667e-07 0 0 0"/>
+            <inertial pos="0 0 -0.06" mass="0.02" fullinertia="2.1792e-05 2.18613e-05 7.2e-07 0 0 0"/>
             <joint name="HR_knee" class="knee"/>
             <geom type="capsule" fromto="0 0 0 0 0 -0.088" size="0.007" contype="3"/>
             <geom name="HR_foot" type="sphere" pos="0 0 -0.1" size="0.012" contype="3"/>

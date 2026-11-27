@@ -8,7 +8,8 @@ ordered. This module computes them for any model that follows erg's names (robot
 - standing: centre-of-mass height above the ground, the support rectangle of the four feet, the centre of mass's
   offset from the support centre, and its height divided by half of the support width (the static sideways tipping
   angle is atan(half width / height));
-- leg mass below the hip flexion joint (the thigh and shank bodies), as a fraction of the total;
+- leg mass below the hip flexion joint (the thigh and shank bodies), as a fraction of the total (reported), and the
+  leg's moment of inertia about the hip flexion shaft (the target since #59, when the knee servo moved into the thigh);
 - the hand-made trot of erg.gait at a forward speed: joint torque relative to the stall torque, and the joint speed
   asked of the servos (the change of the joint targets per control period) relative to the no-load speed; for each
   joint its 95th percentile over the walk after a settling time, the largest of these over the joints, and the
@@ -42,7 +43,7 @@ TARGETS = {
     "tipping_angle_deg": (">=", 34.0, "deg"),
     "com_offset_x": ("abs<=", 0.005, "m"),
     "com_offset_y": ("abs<=", 0.005, "m"),
-    "leg_mass_fraction": ("<=", 0.20, ""),
+    "leg_inertia_hip": ("<=", 3.8e-4, "kg m^2"),
     "trot_torque_p95": ("<=", 0.5, "of stall torque"),
     "trot_torque_max": ("<=", 0.8, "of stall torque"),
     "trot_speed_p95": ("<=", 0.6, "of no-load speed"),
@@ -65,7 +66,8 @@ class Targets:
     com_offset_y: float  # m, left positive
     height_over_half_width: float
     tipping_angle_deg: float  # static sideways tipping angle
-    leg_mass_fraction: float  # thigh and shank bodies of all legs / total mass
+    leg_mass_fraction: float  # thigh and shank bodies of all legs / total mass (reported; not a target since #59)
+    leg_inertia_hip: float  # kg m^2: one leg's thigh and shank about its hip flexion shaft, standing
     trot_torque_p95: float  # of the stall torque: the largest over joints of each joint's 95th percentile in time
     trot_torque_max: float
     trot_speed_p95: float  # commanded joint speed (target change per control period) / no-load speed, the same way
@@ -104,6 +106,30 @@ def standing(m: mujoco.MjModel) -> dict:
 def leg_mass_fraction(m: mujoco.MjModel) -> float:
     legs = sum(m.body(f"{leg}_thigh").subtreemass[0] for leg in robot.LEGS)  # the thigh with the shank below it
     return float(legs / m.body_mass.sum())
+
+
+def leg_inertia_hip(m: mujoco.MjModel) -> float:
+    """Moment of inertia of the front-left thigh and shank (with what they carry) about the hip flexion shaft, in the
+    standing posture: what the hip flexion servo has to swing."""
+    d = mujoco.MjData(m)
+    robot.reset_standing(m, d)
+    leg = robot.LEGS[0]
+    joint = m.joint(f"{leg}_hip_flex").id
+    anchor, axis = d.xanchor[joint], d.xaxis[joint]
+    thigh = m.body(f"{leg}_thigh").id
+    total = 0.0
+    for b in range(m.nbody):
+        p = b
+        while p not in (0, thigh):
+            p = m.body_parentid[p]
+        if p != thigh:
+            continue
+        r = d.xipos[b] - anchor
+        r_perp = r - (r @ axis) * axis
+        rot = d.ximat[b].reshape(3, 3)
+        inertia = rot @ np.diag(m.body_inertia[b]) @ rot.T
+        total += axis @ inertia @ axis + m.body_mass[b] * (r_perp @ r_perp)
+    return float(total)
 
 
 def trot(m: mujoco.MjModel, speed: float = TROT_SPEED) -> tuple[float, float, float]:
@@ -152,5 +178,5 @@ def compute(m: mujoco.MjModel | None = None) -> Targets:
     m = m if m is not None else robot.load()
     s = standing(m)
     p95, tmax, s95 = trot(m)
-    return Targets(mass=float(m.body_mass.sum()), leg_mass_fraction=leg_mass_fraction(m), trot_torque_p95=p95,
+    return Targets(mass=float(m.body_mass.sum()), leg_mass_fraction=leg_mass_fraction(m), leg_inertia_hip=leg_inertia_hip(m), trot_torque_p95=p95,
                    trot_torque_max=tmax, trot_speed_p95=s95, stand_up_torque_max=stand_up(m), **s)

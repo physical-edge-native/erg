@@ -6,7 +6,7 @@ Pass criteria:
   corrections are clipped to [-1, 1] (0.5 to 1.5 times the base frequency);
 - the central mode has the same clocks, advancing the same way;
 - with zero corrections, the joint targets of the PPO controllers are the base gait (the trot with the
-  commanded forward speed's stride) at each leg's phase, bit for bit, and with zero stride the base gait's foot stays above its standing point;
+  commanded forward speed's stride) at each leg's phase, bit for bit, and with zero stride the base gait's foot stays above its standing point (FOOT_X ahead of the hip shaft);
 - a leg's phase reaches only the legs it is linked to: with "neighbours", never the diagonal leg;
 - with zero corrections, the base gait alone keeps the robot up (no fall) for 10 s stepping in place, and walks
   forward at more than 0.3 of a command of 0.15 m/s (0.12 m/s with the first body; about 0.06 m/s with body L1, #59;
@@ -59,7 +59,7 @@ def test_zero_corrections_follow_the_base_gait():
             assert np.array_equal(w.env.data.ctrl, np.clip(expected.ravel(), w.env.model.actuator_ctrlrange[:, 0],
                                                            w.env.model.actuator_ctrlrange[:, 1]))
     x, z = gait.foot_path(0.75, 0.0)
-    assert x == 0.0 and z > -gait.STAND_DEPTH
+    assert x == gait.FOOT_X and z > -gait.STAND_DEPTH
 
 
 def test_phase_reaches_only_linked_legs():
