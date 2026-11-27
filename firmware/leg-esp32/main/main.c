@@ -4,9 +4,12 @@
  * Every CONTROL_PERIOD_US (20 ms) the loop reads the leg's three STS3215 servos on their serial bus (through the
  * Waveshare Bus Servo Adapter (A)), the LSM6DSOX IMU on I2C and the foot switch on a GPIO, builds the leg's
  * observation in the order of the training environment (leg.c, obs_layout.h), runs the policy in Dyne's mlp-actor
- * (policy.c) and sends the three joint goals in one packet: the base gait at the leg's gait phase plus the policy's
- * corrections; then it advances the leg's gait clock by the policy's frequency correction. Without a policy the
- * corrections are zero and the leg follows the base gait (stepping in place for a zero command). After reading the
+ * (policy.c) every POLICY_PERIODS loops (25 Hz), and runs the leg's base controller (base_ctrl.c, Issue #85) with
+ * the policy's adjustments, held in between; it sends the controller's three joint goals in one packet and advances
+ * the leg's gait clock by the controller's frequency correction. Without a policy the adjustments are zero and the
+ * base controller walks alone (stepping in place for a zero command). The controller's message values (velocity
+ * estimate, speed integral) are kept for the neighbours; this stage has no links between legs yet, so the
+ * controller hears no neighbour (its message slots read "nothing received"). After reading the
  * servos it sets the knee servo's torque limit from the measured knee angle (leg_knee_torque_limit, Issue #81), so
  * that the push rod's force stays under its allowable load near the straight end of the knee range.
  *
@@ -32,6 +35,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "base_ctrl.h"
 #include "leg.h"
 #include "policy.h"
 #include "sts.h"
@@ -223,20 +227,26 @@ void app_main(void)
 #if CONFIG_ERG_EMBED_POLICY
     have_policy = policy_init(wasm_start, (uint32_t)(wasm_end - wasm_start), model_start,
                               (uint32_t)(model_end - model_start));
-    if (have_policy && (policy_n_in() != OBS_SIZE || policy_n_out() != ACT_SIZE_ALL)) {
+    if (have_policy && (policy_n_in() != OBS_SIZE || policy_n_out() != N_ADJUST)) {
         ESP_LOGE(TAG, "policy has %u inputs and %u outputs; this firmware needs %d and %d", (unsigned)policy_n_in(),
-                 (unsigned)policy_n_out(), OBS_SIZE, ACT_SIZE_ALL);
+                 (unsigned)policy_n_out(), OBS_SIZE, N_ADJUST);
         have_policy = false;
     }
     if (have_policy) policy_check(check_start, (size_t)(check_end - check_start));
 #else
-    ESP_LOGW(TAG, "built without a policy: holding the standing posture");
+    ESP_LOGW(TAG, "built without a policy: the base controller alone");
 #endif
 
     const double command[3] = {0.0, 0.0, 0.0};
     const double phase_start[OBS_N_LEGS] = GAIT_PHASE_START;
     double phase = phase_start[CONFIG_ERG_LEG_INDEX];
-    double obs[OBS_SIZE], action[64] = {0}, targets[ACT_JOINTS];
+    double obs[OBS_SIZE], action[64] = {0};
+    bc_leg_t ctrl;
+    bc_init(&ctrl, CONFIG_ERG_LEG_INDEX);
+    bc_adjust_t adj = {0};
+    bc_output_t out;
+    double learned[ACT_LEARNED] = {0}; /* the message values for the neighbours (erg.env clips them to [-1, 1]) */
+    uint32_t period = 0;
     sts_state_t servo[ACT_JOINTS] = {0};
     int16_t acc_raw[3] = {0}, gyro_raw[3] = {0};
     double acc[3], gyro[3];
@@ -268,13 +278,22 @@ void app_main(void)
         bool contact = gpio_get_level(CONFIG_ERG_SWITCH_GPIO) == 0; /* switch to ground, pulled up */
         leg_observation(obs, s_cal, servo, acc, gyro, contact, phase, command, CONFIG_ERG_LEG_INDEX);
         int64_t t2 = esp_timer_get_time();
-        if (!have_policy || policy_eval(obs, action) != 0) memset(action, 0, sizeof action);
-        leg_targets(action, phase, command[0], targets);
+        if (period % POLICY_PERIODS == 0) { /* the policy's adjustments, held for POLICY_PERIODS periods */
+            if (!have_policy || policy_eval(obs, action) != 0) memset(action, 0, sizeof action);
+            bc_adjust_from_action(action, &adj);
+        }
+        period++;
+        bc_step(&ctrl, obs, &adj, &out);
+        for (int i = 0; i < ACT_LEARNED; i++) {
+            double v = out.message[i];
+            learned[i] = v < -1.0 ? -1.0 : (v > 1.0 ? 1.0 : v);
+        }
         int64_t t3 = esp_timer_get_time();
         uint16_t goals[ACT_JOINTS];
-        for (int j = 0; j < ACT_JOINTS; j++) goals[j] = leg_goal(&s_cal[j], targets[j]);
+        for (int j = 0; j < ACT_JOINTS; j++) goals[j] = leg_goal(&s_cal[j], out.targets[j]);
         servo_write_goals(goals);
-        phase = leg_clock(phase, action[ACT_FREQ]);
+        phase = leg_clock(phase, out.freq);
+        (void)learned;
         int64_t t4 = esp_timer_get_time();
 
         stat_add(&st_bus, t1 - t0);

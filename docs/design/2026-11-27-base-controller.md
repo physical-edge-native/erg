@@ -207,5 +207,10 @@ written before the run; the code follows the rows below.
 - The velocity estimate assumes the stance foot does not slip.
 - No stumble or early and late touch-down reflexes yet (redesign record, item 1); they come with steps and slopes
   (tier T2).
-- The controller is written to be ported bit for bit (erg.exactmath, square roots, plain operations) but is not
-  yet in the firmware; the bit-exact check against C comes with that port.
+- Ported to the leg firmware (Issue #85, `firmware/leg-esp32/main/base_ctrl.c`) with the policy's adjustments: the
+  same operations in the same order, with `xmath.c` for the trigonometry and its constants generated from this
+  module into `obs_layout.h` (`scripts/gen_firmware_layout.py`), so a retune only regenerates them.
+  `tests/test_firmware_host.py` checks the C version against this one bit for bit over recorded walks: four
+  commands and seeds, with and without the policy's adjustments (held two control periods), with the neighbours'
+  messages and, in one, 30 % message loss (missing and aged messages). On the robot the legs do not exchange
+  messages yet (ESP-NOW is a later issue), so each leg's controller runs without its neighbours until then.

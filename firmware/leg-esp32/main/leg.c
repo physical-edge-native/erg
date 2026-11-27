@@ -49,6 +49,19 @@ void leg_phase_values(double phase, double *c, double *s)
     xm_sincos(2.0 * 3.141592653589793 * phase, s, c);
 }
 
+/* erg.gait.leg_angles, operation for operation. */
+void leg_angles(double x, double z, double *flex, double *knee)
+{
+    double r2 = x * x + z * z;
+    double c = (r2 - GAIT_THIGH_SQ - GAIT_SHANK_SQ) / GAIT_TWO_THIGH_SHANK;
+    double k = -xm_acos(c < -1.0 ? -1.0 : (c > 1.0 ? 1.0 : c));
+    double phi = xm_atan2(-x, -z);
+    double sk, ck;
+    xm_sincos(k, &sk, &ck);
+    *flex = phi - xm_atan2(GAIT_SHANK * sk, GAIT_THIGH + GAIT_SHANK * ck);
+    *knee = k;
+}
+
 /* erg.gait.foot_path and leg_angles, operation for operation. */
 void leg_base(double phase, double stride, double out[ACT_JOINTS])
 {
@@ -63,13 +76,8 @@ void leg_base(double phase, double stride, double out[ACT_JOINTS])
         x = -stride / 2 + stride * u + GAIT_FOOT_X;
         z = -GAIT_STAND_DEPTH + GAIT_STEP_HEIGHT * sn;
     }
-    double r2 = x * x + z * z;
-    double c = (r2 - GAIT_THIGH_SQ - GAIT_SHANK_SQ) / GAIT_TWO_THIGH_SHANK;
-    double knee = -xm_acos(c < -1.0 ? -1.0 : (c > 1.0 ? 1.0 : c));
-    double phi = xm_atan2(-x, -z);
-    double sk, ck;
-    xm_sincos(knee, &sk, &ck);
-    double flex = phi - xm_atan2(GAIT_SHANK * sk, GAIT_THIGH + GAIT_SHANK * ck);
+    double flex, knee;
+    leg_angles(x, z, &flex, &knee);
     out[0] = 0.0;
     out[1] = flex;
     out[2] = knee;

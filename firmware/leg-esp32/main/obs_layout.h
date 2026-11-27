@@ -48,3 +48,39 @@
 #define KNEE_CRANK_PHASE 0.0
 #define KNEE_LIMIT_FULL 1000
 #define KNEE_LIMIT_STEP 10
+/* Base controller (erg.base_controller) and the policy's adjustments of it (Issue #85). */
+#define N_ADJUST 6
+#define ADJUST_SCALE {0.3, 0.02, 0.02, 0.006, 0.5, 0.5}
+#define POLICY_PERIODS 2 /* control periods per policy step */
+#define BC_PI 3.141592653589793
+#define BC_DT 0.02
+#define BC_G 9.81
+#define BC_PERIOD 0.45
+#define BC_STANCE 0.5
+#define BC_STEP_HEIGHT 0.012
+#define BC_RETRACT 0.003
+#define BC_RETRACT_START 0.8
+#define BC_SWING_RAMP 0.25
+#define BC_COUPLING 0.5
+#define BC_SPEED_INTEGRAL 1.0
+#define BC_INTEGRAL_LIMIT 0.15
+#define BC_VEL_TAU 0.15
+#define BC_ATT_TAU 1.0
+#define BC_ACC_TRUST 0.2
+#define BC_ATT_GAIN 0.5
+#define BC_YAW_GAIN 0.5
+#define BC_MAX_REACH 0.05
+#define BC_MAX_ATT 0.03
+#define BC_PLACE_GAIN 0.12031220006383307
+#define BC_THIGH 0.095
+#define BC_SHANK 0.1
+#define BC_LEG_OFFSET 0.06
+#define BC_HIP_X 0.085
+#define BC_HIP_Y 0.04
+#define BC_STAND_DEPTH 0.14
+#define BC_FOOT_X (-0.008)
+#define BC_NEIGHBOURS {{1, 2}, {0, 3}, {0, 3}, {1, 2}} /* each leg's two neighbours, in the order of the sums */
+#define BC_LEG_SX {1.0, 1.0, (-1.0), (-1.0)}
+#define BC_LEG_SY {1.0, (-1.0), 1.0, (-1.0)}
+#define BC_M_LEARNED 7 /* in a message slot */
+#define BC_M_PHASE 11

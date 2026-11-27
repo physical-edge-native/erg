@@ -45,6 +45,9 @@ void leg_imu(const leg_imu_mount_t *m, const int16_t acc_raw[3], const int16_t g
 double leg_clock(double phase, double freq);
 /* Cosine and sine of 2 pi phase (erg.env.Env.phase_values). */
 void leg_phase_values(double phase, double *c, double *s);
+/* Hip flexion and knee angles that put the foot centre at (x forward, z up) from the hip flexion shaft
+ * (erg.gait.leg_angles). */
+void leg_angles(double x, double z, double *flex, double *knee);
 /* The base gait's joint targets at a phase for a stride (erg.gait.leg_targets). */
 void leg_base(double phase, double stride, double out[ACT_JOINTS]);
 
