@@ -1,20 +1,26 @@
 stage,part,role,quantity,spare,reference_price,currency,tax_included,source,second_source,checked
-1,Feetech STS3215 serial bus servo (7.4 V),servo,3,no,3245,JPY,yes,https://www.switch-science.com/products/7489,https://www.waveshare.com/st3215-servo.htm?sku=33014,2026-11-25
-1,Feetech STS3215 serial bus servo (7.4 V),servo,1,yes,3245,JPY,yes,https://www.switch-science.com/products/7489,https://www.waveshare.com/st3215-servo.htm?sku=33014,2026-11-25
+1,Waveshare ST3215 serial bus servo (12 V class; 30 kg cm),servo,3,no,21.99,USD,no,https://www.waveshare.com/st3215-servo.htm?sku=22414,https://www.dfrobot.com/product-2962.html,2026-11-27
+1,Waveshare ST3215 serial bus servo (12 V class; 30 kg cm),servo,2,yes,21.99,USD,no,https://www.waveshare.com/st3215-servo.htm?sku=22414,https://www.dfrobot.com/product-2962.html,2026-11-27
 1,Seeed Studio XIAO ESP32S3,microcontroller,1,no,1456,JPY,yes,https://www.switch-science.com/products/8968,https://www.digikey.com/en/products/detail/seeed-technology-co-ltd/102010634/26553885,2026-11-25
 1,Adafruit LSM6DSOX 6 DoF accelerometer and gyroscope (4438),imu,1,no,11.95,USD,no,https://www.adafruit.com/products/4438,https://www.digikey.com/en/products/detail/adafruit-industries-llc/4438/11497501,2026-11-25
 1,Waveshare Bus Servo Adapter (A),bus_adapter,1,no,4.99,USD,no,https://www.waveshare.com/product/bus-servo-adapter-a.htm,,2026-11-25
 1,Omron SS-5GLD subminiature microswitch with lever (foot contact),foot_switch,1,no,187,JPY,yes,https://jp.rs-online.com/web/p/micro-switches/3194300,,2026-11-25
 1,Omron SS-5GLD subminiature microswitch with lever (foot contact),foot_switch,1,yes,187,JPY,yes,https://jp.rs-online.com/web/p/micro-switches/3194300,,2026-11-25
-2,Feetech STS3215 serial bus servo (7.4 V),servo,9,no,3245,JPY,yes,https://www.switch-science.com/products/7489,https://www.waveshare.com/st3215-servo.htm?sku=33014,2026-11-25
+2,Waveshare ST3215 serial bus servo (12 V class; 30 kg cm),servo,9,no,21.99,USD,no,https://www.waveshare.com/st3215-servo.htm?sku=22414,https://www.dfrobot.com/product-2962.html,2026-11-27
 2,Seeed Studio XIAO ESP32S3,microcontroller,3,no,1456,JPY,yes,https://www.switch-science.com/products/8968,https://www.digikey.com/en/products/detail/seeed-technology-co-ltd/102010634/26553885,2026-11-25
 2,Adafruit LSM6DSOX 6 DoF accelerometer and gyroscope (4438),imu,3,no,11.95,USD,no,https://www.adafruit.com/products/4438,https://www.digikey.com/en/products/detail/adafruit-industries-llc/4438/11497501,2026-11-25
 2,Waveshare Bus Servo Adapter (A),bus_adapter,3,no,4.99,USD,no,https://www.waveshare.com/product/bus-servo-adapter-a.htm,,2026-11-25
 2,Omron SS-5GLD subminiature microswitch with lever (foot contact),foot_switch,3,no,187,JPY,yes,https://jp.rs-online.com/web/p/micro-switches/3194300,,2026-11-25
 1,Bench power supply 0-30 V 0-10 A with adjustable current limit; bought in Japan (estimate; e.g. OWON SPE3103 or similar),power_supply,1,no,12000,JPY,yes,https://item.rakuten.co.jp/owon/spe3051/,,2026-11-25
-1,Pololu D24V10F5 5 V 1 A step-down regulator (microcontroller supply from 7.4 V),regulator,1,no,13.95,USD,no,https://www.pololu.com/product/2831,,2026-11-25
+1,Pololu D24V10F5 5 V 1 A step-down regulator (microcontroller supply from the 3-cell battery),regulator,1,no,13.95,USD,no,https://www.pololu.com/product/2831,,2026-11-25
 1,Small parts: M2 self-tapping screws; wires; XT60 and JST connectors (estimate; the servos come with horn screws),small_parts,1,no,3000,JPY,yes,,,2026-11-25
-2,Pololu D24V10F5 5 V 1 A step-down regulator (microcontroller supply from 7.4 V),regulator,3,no,13.95,USD,no,https://www.pololu.com/product/2831,,2026-11-25
-2,Gens Ace 2S 7.4 V 2200 mAh 60C LiPo battery with XT60,battery,2,no,23.79,USD,no,https://horizonhobby.com/product/7.4v-2200mah-2s-60c-hardcase-g-tech-lipo-battery-xt60/GEA222S60X76GT.html,https://www.ebay.com/p/26051953025,2026-11-25
-2,G-FORCE G2 2S LiPo balance charger (0.8 A),charger,1,no,1520,JPY,yes,https://joshinweb.jp/game/19520/4580416431590.html,https://hobbyking.com/jp_jp/batteries-chargers/chargers.html,2026-11-25
-2,Small parts: M2 self-tapping screws; wires; XT60 and JST connectors (estimate),small_parts,1,no,3000,JPY,yes,,,2026-11-25
+2,Pololu D24V10F5 5 V 1 A step-down regulator (microcontroller supply from the 3-cell battery),regulator,3,no,13.95,USD,no,https://www.pololu.com/product/2831,,2026-11-25
+2,G-FORCE Noir 3S 11.1 V 1300 mAh LiPo battery (GFG910; 86 x 30 x 17 mm; 99 g; mini connector),battery,2,no,3780,JPY,yes,https://joshinweb.jp/game/59360/4580416509107.html,https://hobbyking.com/jp_jp/turnigy-1300mah-3s-30c-lipo-pack.html,2026-11-27
+2,"G-FORCE G3 DUO AC charger, 2-3 cell LiPo, two packs at once (G0318)",charger,1,no,5580,JPY,yes,https://joshinweb.jp/game/27501/4580416433181.html,https://hobbyking.com/turnigy-12v-2-3s-basic-balance-charger.html,2026-11-27
+2,Small parts: M2 self-tapping screws; wires; XT60 and JST connectors; battery adapter from the mini connector to XT60 (estimate),small_parts,1,no,3000,JPY,yes,,,2026-11-25
+1,"Push rod parts for the knee: 4 x 3 mm carbon-fibre tube (about 100 mm per leg), two M2 ball links per leg, M2 screws (estimate)",small_parts,1,no,2000,JPY,yes,,,2026-11-27
+1,"Foot caps: silicone or rubber caps over the 12 mm foot sphere, a pack (estimate; or printed in TPU)",small_parts,1,no,800,JPY,yes,,,2026-11-27
+2,"Push rod parts for the knee: 4 x 3 mm carbon-fibre tube (about 100 mm per leg), two M2 ball links per leg, M2 screws (estimate)",small_parts,1,no,2000,JPY,yes,,,2026-11-27
+2,"Foot caps: silicone or rubber caps over the 12 mm foot sphere, a pack (estimate; or printed in TPU)",small_parts,1,no,800,JPY,yes,,,2026-11-27
+option,"Round force-sensitive resistor, 0.3-10 N (Alpha MF01A-N-221-A01; foot force, optional)",foot_force,4,no,3.95,USD,no,https://www.adafruit.com/product/166,https://www.interlinkelectronics.com/products/fsr-model-402,2026-11-27
+option,"Round force-sensitive resistor, 0.3-10 N (Alpha MF01A-N-221-A01; foot force, optional)",foot_force,2,yes,3.95,USD,no,https://www.adafruit.com/product/166,https://www.interlinkelectronics.com/products/fsr-model-402,2026-11-27
