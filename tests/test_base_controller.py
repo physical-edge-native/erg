@@ -3,8 +3,7 @@
 The pass conditions are checked here on seed 0 over 10 s (measured over 4-10 s), one command of each kind, so that
 the suite stays short on the CI's three systems (each run takes about a second); scripts/base_controller.py runs the
 full set (five seeds, 20 s, every command) and its output is recorded in the design record. The torque condition
-fails with the current servo model (design record, Results): it is kept as a strict expected failure, so that the
-test reports it, and turns red when it starts to pass and the record has to be updated.
+is the one changed by the maintainer after the first run (design record): at 0.1 m/s.
 """
 
 import inspect
@@ -131,7 +130,8 @@ def test_small_push_no_fall(direction):
     assert not r.fell
 
 
-@pytest.mark.xfail(strict=True, reason="condition 6 fails with the current servo model (design record, Results)")
 def test_torque_condition():
-    r = bc.run((0.2, 0.0, 0.0), 0, seconds=SECONDS, window=WINDOW)
+    """Condition 6 as changed after the first run (design record): at 0.1 m/s. The torque at 0.15 and 0.2 m/s is
+    reported by scripts/base_controller.py, not asserted."""
+    r = bc.run(bc.TORQUE_COMMAND, 0, seconds=SECONDS, window=WINDOW)
     assert r.torque_p95 <= bc.TORQUE_P95

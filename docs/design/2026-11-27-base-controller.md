@@ -103,7 +103,8 @@ links "all" (where the diagonal leg's message would be readable) as with "neighb
 ## Results (2026-11-27)
 
 Run with `uv run python scripts/base_controller.py` (five seeds, 20 s, Dyne's wire format) on the controller as
-committed with this section. Nothing in the conditions above was changed after the run.
+committed with this section. Nothing in the conditions above was changed after the run; condition 6 was changed
+later by the maintainer, in a separate section below, with the first version and its failed result kept here.
 
 | # | Condition | Result | Measured (over seeds 0–4) |
 |---|---|---|---|
@@ -146,6 +147,42 @@ What I would change, for the maintainer to choose (it changes a body target of t
    margin (for example 0.5 of the stall torque at 0.12 m/s), or keep 0.2 m/s with less margin.
 3. If neither suffices: a faster servo (more no-load speed at the same stall torque), or a lighter swing (the swing's
    speed, not its mass, dominates here).
+
+## Changed after the first run (maintainer, 2026-11-27)
+
+**This change was made after the measurement above, having seen its result.** Condition 6 as first written (≤ 0.5 at
+0.2 m/s) and its failure stay above as they were.
+
+| # | Condition (changed) | Commands | Pass when, for every seed |
+|---|---|---|---|
+| 6 | Torque | (0.1, 0, 0) | worst joint's 95th percentile of torque ÷ stall torque over 5–20 s ≤ 0.5. At (0.15, 0, 0) and (0.2, 0, 0) the same value is reported only |
+
+Decided by the maintainer: keep the 12 V ST3215 servo; the torque margin target (≤ 0.5 of the stall torque) applies
+at walking speeds of 0.1–0.15 m/s, not 0.2 m/s. Reasons:
+
+- The priority for the demonstration is stable walking, not speed.
+- The redesign record's baseline of 0.41 was measured with the open-loop trot commanded at 0.2 m/s, which walks at
+  about 0.1 m/s actual speed; the target was in effect set at about 0.1 m/s.
+- The bench identification of the real servo (#70 and the servo identification of the redesign record) will revisit
+  the torque–speed line this result depends on, and with it this condition.
+
+Result with the changed condition (`scripts/base_controller.py`, five seeds, 20 s):
+
+| Speed | Worst joint's 95th percentile ÷ stall torque | |
+|---|---|---|
+| 0.1 m/s | 0.34–0.35 | **pass** (condition 6) |
+| 0.15 m/s | 0.52–0.55 | reported only |
+| 0.2 m/s | 0.72–0.73 | reported only |
+
+Context for the decision: servo candidates compared by the coordinating agent in MuJoCo with this controller
+(seed 0, 12 s; position actuator model with each servo's stall torque and no-load speed; the servo masses in the
+model were not changed). Worst joint's 95th percentile ÷ that servo's stall torque:
+
+| Servo (seller's values) | 0.1 m/s | 0.15 m/s | 0.2 m/s | 0.3 m/s |
+|---|---|---|---|---|
+| ST3215 12 V (2.94 N·m, 4.72 rad/s; kept) | 0.35 | 0.52 | 0.73 | 1.00 |
+| ST3215-HS (1.96 N·m, 11.1 rad/s) | 0.46 | – | 0.59 | fell |
+| STS3250 (4.9 N·m, 7.87 rad/s) | 0.20 | – | 0.42 | 0.59 |
 
 ### Found while tuning (choices made with the implementation, to be reviewed)
 

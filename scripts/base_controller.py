@@ -2,8 +2,8 @@
 
 For each command and seed, walks 20 s in MuJoCo (per-leg mode, messages between neighbours only, through Dyne's wire
 format) and prints the mean forward and sideways speed, the yaw rate, the largest tilt, the lowest torso height,
-falls, and the worst joint's 95th percentile and maximum of torque / stall torque; then the pushes, the torque
-condition and determinism. Exit status 1 if a condition fails.
+falls, and the worst joint's 95th percentile and maximum of torque / stall torque; then the torque at the speeds
+reported only, the pushes and determinism. Exit status 1 if a condition fails.
 
     uv run python scripts/base_controller.py [--seeds 0,1,2,3,4] [--seconds 20]
 """
@@ -53,8 +53,13 @@ def main() -> int:
                   f"{'pass' if not bad else 'FAIL: ' + '; '.join(bad)}", flush=True)
             if bad:
                 failed.append((cmd, seed, bad))
-            if cmd == (0.2, 0.0, 0.0) and r.torque_p95 > bc.TORQUE_P95:
+            if cmd == bc.TORQUE_COMMAND and r.torque_p95 > bc.TORQUE_P95:
                 failed.append((cmd, seed, [f"torque p95 {r.torque_p95:.2f} > {bc.TORQUE_P95}"]))
+    print(f"\ntorque (worst joint's 95th percentile / stall torque; condition 6: <= {bc.TORQUE_P95} at "
+          f"{bc.TORQUE_COMMAND[0]} m/s; reported only at the speeds below):")
+    for cmd in bc.TORQUE_REPORTED:
+        values = [bc.run(cmd, seed, seconds=args.seconds).torque_p95 for seed in seeds]
+        print(f"  {cmd}: " + "  ".join(f"{v:.2f}" for v in values), flush=True)
     print(f"\npushes: {bc.PUSH_FORCE} N sideways for {bc.PUSH_SECONDS} s at 10 s, walking at 0.2 m/s")
     for direction in (1, -1):
         for seed in seeds:

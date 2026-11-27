@@ -378,6 +378,10 @@ SIDEWAYS_TOL = 0.5
 DRIFT_SPEED = 0.05  # m/s
 DRIFT_YAW = 0.1  # rad/s
 TORQUE_P95 = 0.5
+# Condition 6 as changed by the maintainer after the first run (design record): the limit applies at 0.1 m/s;
+# 0.15 and 0.2 m/s are reported only. The first version applied it at 0.2 m/s and failed (0.72-0.73).
+TORQUE_COMMAND = (0.1, 0.0, 0.0)
+TORQUE_REPORTED = [(0.15, 0.0, 0.0), (0.2, 0.0, 0.0)]
 
 
 def check(command, r: Result) -> list[str]:
