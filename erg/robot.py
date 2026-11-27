@@ -5,21 +5,23 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
+from erg import design
+
 MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "quadruped.xml"
 
 LEGS = ("FL", "FR", "HL", "HR")
 JOINTS_PER_LEG = ("hip_abd", "hip_flex", "knee")
 JOINT_NAMES = tuple(f"{leg}_{j}" for leg in LEGS for j in JOINTS_PER_LEG)
 
-# Feetech STS3215 at 7.4 V, from its datasheet (see models/quadruped.xml).
-SERVO_STALL_TORQUE = 1.91  # N*m (19.5 kg*cm)
-SERVO_NO_LOAD_SPEED = 5.51  # rad/s (0.19 s per 60 degrees)
+# The 12 V class serial bus servo of the redesign (erg/design.py, Issue #59; values to be checked on a real servo).
+SERVO_STALL_TORQUE = design.SERVO_STALL_TORQUE  # N*m
+SERVO_NO_LOAD_SPEED = design.SERVO_NO_LOAD_SPEED  # rad/s
 
 # Control period of the design record: 20 ms, i.e. 10 simulation steps of 2 ms.
 CONTROL_PERIOD = 0.02
 
-# Standing posture, the same for every leg: feet under the hips, knees bent backwards.
-STAND = np.array([0.0, 0.6, -1.2] * len(LEGS))
+# Standing posture, the same for every leg: feet straight under the hip flexion shafts, knees bent backwards.
+STAND = np.array([0.0, *design.stand_angles()] * len(LEGS))
 
 
 def load() -> mujoco.MjModel:
