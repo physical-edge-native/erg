@@ -101,6 +101,14 @@ def test_training_and_evaluation_apply_the_same_adjustments(form, interpolate):
         assert np.array_equal(bits(w.targets), bits(ev.targets[ppo.POLICY_PERIODS * j + 1]))
 
 
+def test_smoothness_weights_of_step_3():
+    # #86 step 3: ten times the weights of #82's first training (rate 0.05, 0.02; CAPS 0.1, 1.0)
+    assert (reward.WALK_W_RATE, reward.WALK_W_RATE2) == (0.5, 0.2)
+    cfg = ppo.Config()
+    assert (cfg.caps_temporal, cfg.caps_spatial) == (1.0, 10.0)
+    assert (ppo.Config(action="gait").caps_temporal, ppo.Config(action="gait").caps_spatial) == (0.0, 0.0)
+
+
 def test_walk_commands_in_range():
     w = ppo.Worker(ppo.Config(form="split", servo="none"), 0)
     for _ in range(20):

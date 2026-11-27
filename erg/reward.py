@@ -100,8 +100,8 @@ WALK_W_HEIGHT = 100.0  # per m^2
 WALK_HEIGHT = 0.15  # m, torso centre standing (body L1; erg.base_controller.STANDING_HEIGHT)
 WALK_W_POSTURE = 1.0  # per rad^2 (about roll^2 + pitch^2)
 WALK_W_TORQUE = 0.5
-WALK_W_RATE = 0.05
-WALK_W_RATE2 = 0.02
+WALK_W_RATE = 0.5  # 0.05 in the first training of #82 and step 2 of #86; ten times since step 3 of #86
+WALK_W_RATE2 = 0.2  # 0.02 before step 3 of #86
 
 
 def tilt_squared(data) -> float:

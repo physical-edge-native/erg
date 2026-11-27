@@ -61,9 +61,11 @@ POLICY_PERIODS = 2  # "base": control periods per policy step (40 ms, 25 Hz)
 CAPS_NOISE = 0.01  # standard deviation of the observation noise of the spatial CAPS term
 
 # Settings that differ between the action mappings; Config fields left at None take these.
+# CAPS weights for "base": temporal 0.1 and spatial 1.0 in the first training of #82 and step 2 of #86; ten times
+# since step 3 of #86.
 DEFAULTS = {
-    "base": {"servo": "random", "rollout": 64, "entropy_coef": 0.0, "init_log_std": -1.6, "caps_temporal": 0.1,
-             "caps_spatial": 1.0, "separate_clip": True,
+    "base": {"servo": "random", "rollout": 64, "entropy_coef": 0.0, "init_log_std": -1.6, "caps_temporal": 1.0,
+             "caps_spatial": 10.0, "separate_clip": True,
              "interpolate": True},
     "gait": {"servo": "none", "rollout": 128, "entropy_coef": 0.01, "init_log_std": -2.3, "caps_temporal": 0.0,
              "caps_spatial": 0.0, "separate_clip": False,
