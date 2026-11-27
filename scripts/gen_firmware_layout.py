@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from erg import env, gait, ppo, robot  # noqa: E402
+from erg import env, gait, knee_limit, ppo, robot  # noqa: E402
 
 HEADER = ROOT / "firmware" / "leg-esp32" / "main" / "obs_layout.h"
 
@@ -57,11 +57,18 @@ def text() -> str:
     lines.append(f"#define GAIT_PERIOD {gait.PERIOD!r}")
     lines.append(f"#define GAIT_STEP_HEIGHT {gait.STEP_HEIGHT!r}")
     lines.append(f"#define GAIT_STAND_DEPTH {float(gait.STAND_DEPTH)!r}")
+    lines.append(f"#define GAIT_FOOT_X {float(gait.FOOT_X)!r}")
     lines.append(f"#define GAIT_THIGH {gait.THIGH!r}")
     lines.append(f"#define GAIT_SHANK {gait.SHANK!r}")
     lines.append(f"#define GAIT_THIGH_SQ {gait.THIGH * gait.THIGH!r}")
     lines.append(f"#define GAIT_SHANK_SQ {gait.SHANK * gait.SHANK!r}")
     lines.append(f"#define GAIT_TWO_THIGH_SHANK {2 * gait.THIGH * gait.SHANK!r}")
+    lines.append("/* Knee torque limit (erg.knee_limit): min(STALL, ARM * |sin(knee + CRANK_PHASE)|). */")
+    lines.append(f"#define KNEE_LIMIT_ARM {knee_limit.ARM!r}")
+    lines.append(f"#define KNEE_LIMIT_STALL {knee_limit.STALL!r}")
+    lines.append(f"#define KNEE_CRANK_PHASE {knee_limit.CRANK_PHASE!r}")
+    lines.append(f"#define KNEE_LIMIT_FULL {knee_limit.REGISTER_FULL}")
+    lines.append(f"#define KNEE_LIMIT_STEP {knee_limit.WRITE_STEP}")
     return "\n".join(lines) + "\n"
 
 

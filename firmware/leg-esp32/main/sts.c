@@ -70,6 +70,20 @@ size_t sts_sync_write_goal(uint8_t *buf, size_t cap, const uint8_t *ids, const u
     return finish(buf, len);
 }
 
+size_t sts_sync_write_u16(uint8_t *buf, size_t cap, uint8_t addr, const uint8_t *ids, const uint16_t *values, size_t n)
+{
+    size_t len = header(buf, cap, STS_BROADCAST_ID, STS_INST_SYNC_WRITE, 2 + 3 * n);
+    if (!len) return 0;
+    buf[5] = addr;
+    buf[6] = 2;
+    for (size_t i = 0; i < n; i++) {
+        buf[7 + 3 * i] = ids[i];
+        buf[8 + 3 * i] = (uint8_t)(values[i] & 0xFF);
+        buf[9 + 3 * i] = (uint8_t)(values[i] >> 8);
+    }
+    return finish(buf, len);
+}
+
 int16_t sts_sign_magnitude(uint16_t raw, unsigned sign_bit)
 {
     uint16_t mag = raw & (uint16_t)((1u << sign_bit) - 1u);

@@ -21,6 +21,7 @@
 
 #define STS_ADDR_GOAL_POSITION 0x2A  /* goal position (2), goal time (2), goal speed (2) */
 #define STS_ADDR_PRESENT_POSITION 0x38 /* present position (2), speed (2), load (2) */
+#define STS_ADDR_TORQUE_LIMIT 0x30     /* torque limit (2, RAM): tenths of a percent of the maximum torque, 0..1000 */
 #define STS_STEPS_PER_TURN 4096
 
 /* Length of a packet with n parameters. */
@@ -35,6 +36,8 @@ size_t sts_read(uint8_t *buf, size_t cap, uint8_t id, uint8_t addr, uint8_t n);
 size_t sts_write_goal(uint8_t *buf, size_t cap, uint8_t id, uint16_t position);
 /* One packet setting the goal positions of n servos. */
 size_t sts_sync_write_goal(uint8_t *buf, size_t cap, const uint8_t *ids, const uint16_t *positions, size_t n);
+/* One packet setting a two-byte register at addr in n servos (broadcast: the servos do not reply). */
+size_t sts_sync_write_u16(uint8_t *buf, size_t cap, uint8_t addr, const uint8_t *ids, const uint16_t *values, size_t n);
 
 typedef struct {
     uint16_t position; /* steps, 0..4095 */

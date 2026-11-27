@@ -10,5 +10,6 @@ test -f third_party/dyne/scripts/onnx_import.py || {
 
 uv sync --locked
 cargo test --quiet --locked --manifest-path crates/erg-links/Cargo.toml --target-dir target/erg-links-test
+uv run python scripts/export_leg.py build/leg > /dev/null  # print-ready leg parts (STEP, STL)
 uv run pytest -q  # includes the leg firmware's parts that run on the PC (tests/test_firmware_host.py)
 echo "ci-check: PASS"

@@ -12,6 +12,9 @@
  *   targets A0..A7 PHASE FORWARD                                -> 3 doubles
  *   clock PHASE F | base PHASE STRIDE | phasevals PHASE          -> 1, 3 or 2 doubles
  *   sincos X | atan2 Y X | acos C                               -> 2, 1 or 1 doubles
+ *   kneelimit Q                                                 -> limit (double), then the register value
+ *   kneewrite LAST VALUE                                        -> 0 or 1
+ *   syncu16 ADDR N ID VALUE ...                                 -> packet bytes in hex
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -161,6 +164,22 @@ int main(void)
         } else if (!strcmp(cmd, "atan2")) {
             double y = rd(), x = rd();
             pd(xm_atan2(y, x));
+        } else if (!strcmp(cmd, "kneelimit")) {
+            double q = rd();
+            pd(leg_knee_torque_limit(q));
+            printf(" %d", leg_knee_limit_register(q));
+        } else if (!strcmp(cmd, "kneewrite")) {
+            long last = ri(), v = ri();
+            printf("%d", leg_knee_limit_should_write((int)last, (int)v) ? 1 : 0);
+        } else if (!strcmp(cmd, "syncu16")) {
+            long addr = ri(), n = ri();
+            uint8_t ids[16];
+            uint16_t vals[16];
+            for (long i = 0; i < n; i++) {
+                ids[i] = (uint8_t)ri();
+                vals[i] = (uint16_t)ri();
+            }
+            pbytes(buf, sts_sync_write_u16(buf, sizeof buf, (uint8_t)addr, ids, vals, (size_t)n));
         } else if (!strcmp(cmd, "acos")) {
             pd(xm_acos(rd()));
         } else {

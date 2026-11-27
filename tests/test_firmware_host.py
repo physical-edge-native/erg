@@ -206,3 +206,20 @@ def test_exact_math_clock_and_base_gait(host):
         want.append(bits(gait.leg_targets(p, stride)))
     for line, got, w in zip(lines, host(lines), want):
         assert got.split() == w, line
+
+
+def test_knee_torque_limit(host):
+    """The knee torque limit (erg.knee_limit, Issue #81): limit and register value bit for bit over a grid of knee
+    angles across the whole range and beyond; the write rule; the torque limit register's packet."""
+    from erg import knee_limit
+
+    rng = np.random.Generator(np.random.PCG64(81))
+    qs = [*np.linspace(-3.2, 0.1, 331), *rng.uniform(-0.3, -0.19, 100), -0.2, -0.23, -2.6, 0.0, -0.0]
+    lines = [f"kneelimit {h(float(q))}" for q in qs]
+    for q, got in zip(qs, host(lines)):
+        t, v = got.split()
+        assert t == h(knee_limit.torque_limit(float(q))) and int(v) == knee_limit.register_value(float(q)), q
+    cases = [(-1, 1000), (1000, 1000), (1000, 999), (869, 870), (869, 878), (869, 879), (995, 1000), (997, 990)]
+    got = host([f"kneewrite {a} {b}" for a, b in cases])
+    assert [int(g) for g in got] == [int(knee_limit.should_write(a, b)) for a, b in cases]
+    assert host(["syncu16 48 1 3 869"])[0] == packet(0xFE, 0x83, [0x30, 2, 3, 869 & 0xFF, 869 >> 8]).hex()
