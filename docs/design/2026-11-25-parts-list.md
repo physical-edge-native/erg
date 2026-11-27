@@ -40,9 +40,9 @@ ordered before this revision. The rows of the 2026-11-25 table above that name t
 | Servo bus adapter | Unchanged (Waveshare Bus Servo Adapter (A)) | Labelled for 9-12.6 V, the ST series' voltage |
 | Push rods | M2 threaded rod and two ball links or rod ends per leg (estimate, one lot per stage) | The knee is driven by a push rod in body L1 |
 | Foot caps | Rubber or silicone caps over the 12 mm foot sphere (estimate), or printed in TPU | Grip and some impact absorption; which one follows the test print |
-| Foot force sensors (optional, stage `option`) | Round force-sensitive resistors, 0.3-10 N (Alpha MF01A-N-221-A01), 4 plus 2 spares | The chosen tier lists foot force sensors; the foot switch already gives contact, so they are bought only if the maintainer decides to. Not counted by the tests |
+| Foot force sensors (optional, stage `option`) | Round force-sensitive resistors, 0.3-10 N (Alpha MF01A-N-221-A01), 4 plus 2 spares | The chosen tier lists foot force sensors; the foot switch already gives contact, so they are bought only if the maintainer decides to. **Not bought now (maintainer, 2026-11-27).** Not counted by the tests |
 
-Prices of the new rows were checked on 2026-11-27 (column `checked`); the rows kept from 2026-11-25 keep that date.
+Ordering is planned for about 2026-12-01 (maintainer, 2026-11-27; Issue #69). Prices of the new rows were checked on 2026-11-27 (column `checked`); the rows kept from 2026-11-25 keep that date.
 
 ## How to read `hardware/bom.csv`
 
